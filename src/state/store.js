@@ -8,6 +8,7 @@ import { ProgressionEngine } from '../engine/progressionEngine.js';
 import { inferTaskWeight } from '../config/responsibilities.js';
 import { audio } from '../services/audioService.js';
 import { notifier } from '../services/notificationService.js';
+import { haptics } from '../services/hapticsService.js';
 
 class Store {
   constructor() {

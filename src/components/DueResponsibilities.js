@@ -1,4 +1,5 @@
 import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
+import { haptics } from '../services/hapticsService.js';
 
 export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTask, onToggleCustomTask) {
   const dueList = RecurrenceEngine.getDueResponsibilities();
@@ -123,6 +124,7 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
   element.querySelectorAll('.task-item[data-type="core"]').forEach((row) => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.task-remove-btn')) return;
+      haptics.impactLight();
       onToggle(row.dataset.id);
     });
   });
@@ -131,6 +133,7 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
   element.querySelectorAll('.task-item[data-type="custom"]').forEach((row) => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.task-remove-btn')) return;
+      haptics.impactLight();
       onToggleCustomTask(row.dataset.id);
     });
   });
@@ -139,6 +142,7 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
   element.querySelectorAll('.task-remove-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      haptics.impactMedium();
       onRemoveTask(btn.dataset.removeId);
     });
   });
@@ -150,6 +154,7 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
   function submitTask() {
     const val = input.value.trim();
     if (val) {
+      haptics.impactLight();
       onAddTask(val);
       input.value = '';
     }

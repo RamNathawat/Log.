@@ -1,5 +1,6 @@
 import { ChallengeEngine } from '../engine/challengeEngine.js';
 import { store } from '../state/store.js';
+import { haptics } from '../services/hapticsService.js';
 
 export function renderSideQuestDirective(state, onAction) {
   const currentPeriod = store.getCurrentPeriod();
@@ -111,10 +112,22 @@ export function renderSideQuestDirective(state, onAction) {
     </div>
   `;
 
-  element.querySelector('#btn-accept-quest')?.addEventListener('click', () => onAction('ACCEPT_QUEST'));
-  element.querySelector('#btn-decline-quest')?.addEventListener('click', () => onAction('DECLINE_QUEST'));
-  element.querySelector('#btn-complete-quest')?.addEventListener('click', () => onAction('COMPLETE_QUEST'));
-  element.querySelector('#btn-fail-quest')?.addEventListener('click', () => onAction('FAIL_QUEST'));
+  element.querySelector('#btn-accept-quest')?.addEventListener('click', () => {
+    haptics.impactMedium();
+    onAction('ACCEPT_QUEST');
+  });
+  element.querySelector('#btn-decline-quest')?.addEventListener('click', () => {
+    haptics.impactLight();
+    onAction('DECLINE_QUEST');
+  });
+  element.querySelector('#btn-complete-quest')?.addEventListener('click', () => {
+    haptics.notificationSuccess();
+    onAction('COMPLETE_QUEST');
+  });
+  element.querySelector('#btn-fail-quest')?.addEventListener('click', () => {
+    haptics.notificationWarning();
+    onAction('FAIL_QUEST');
+  });
 
   return element;
 }
