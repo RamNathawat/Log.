@@ -9,6 +9,7 @@ import { renderProgressScreen } from './components/ProgressScreen.js';
 import { renderLongTermPillars } from './components/LongTermPillars.js';
 import { renderAccountabilityModal, renderCalibrationModal } from './components/AccountabilityModal.js';
 import { renderSyncModal } from './components/SyncModal.js';
+import { notifier } from './services/notificationService.js';
 
 let activeModal = null;
 let currentScreen = 'today'; // 'today' | 'progress' | 'pillars'
@@ -90,7 +91,7 @@ function renderApp() {
   footer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-top: 28px; padding-top: 16px; border-top: 1.5px solid var(--color-border);';
 
   footer.innerHTML = `
-    <span class="telemetry">System OS &middot; Local Encrypted</span>
+    <span class="telemetry">Log. &middot; Local Encrypted</span>
   `;
 
   container.appendChild(footer);
@@ -120,6 +121,11 @@ function closeModal() {
 
 store.subscribe(() => renderApp());
 renderApp();
+
+// Prompt for notification permission on initial boot
+setTimeout(() => {
+  notifier.requestPermission();
+}, 1500);
 
 // Service Worker management: clean old cache in dev so updates appear immediately
 if ('serviceWorker' in navigator) {

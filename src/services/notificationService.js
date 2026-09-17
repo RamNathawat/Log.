@@ -1,18 +1,58 @@
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
+
 /**
  * Notification Service
- * Handles requesting permissions and firing native push notifications.
- * Degrades gracefully if denied or unsupported.
- *
- * macOS Note: You must also grant permission in System Settings →
- * Notifications → [your browser] for banners to appear.
+ * Supports:
+ * 1. Native Android Notification Center (via Capacitor LocalNotifications)
+ * 2. Web / PWA Push Notifications (via ServiceWorker / Notification API)
  */
 class NotificationService {
   constructor() {
-    this.supported = 'Notification' in window;
-    this.permission = this.supported ? Notification.permission : 'denied';
+    this.isNative = Capacitor.isNativePlatform();
+    this.supported = this.isNative || ('Notification' in window);
+    this.permission = this.isNative ? 'prompt' : (this.supported ? Notification.permission : 'denied');
+    this.channelCreated = false;
+
+    // Set up native Android notification channel
+    if (this.isNative) {
+      this.initNativeChannel();
+    }
+  }
+
+  async initNativeChannel() {
+    try {
+      await LocalNotifications.createChannel({
+        id: 'log-notifications',
+        name: 'Log. Directives & Alerts',
+        description: 'Challenges, reminders, and streak updates for Log.',
+        importance: 5, // High importance (heads-up banner + status bar icon + sound)
+        visibility: 1, // Visible on lock screen
+        vibration: true
+      });
+      this.channelCreated = true;
+    } catch (err) {
+      console.warn('[Notif] Could not create native channel:', err);
+    }
   }
 
   async requestPermission() {
+    if (this.isNative) {
+      try {
+        const check = await LocalNotifications.checkPermissions();
+        if (check.display === 'granted') {
+          this.permission = 'granted';
+          return true;
+        }
+        const req = await LocalNotifications.requestPermissions();
+        this.permission = req.display === 'granted' ? 'granted' : 'denied';
+        return this.permission === 'granted';
+      } catch (err) {
+        console.warn('[Notif] Native permission error:', err);
+        return false;
+      }
+    }
+
     if (!this.supported) {
       console.warn('[Notif] Web Notifications not supported in this browser.');
       return false;
@@ -26,9 +66,6 @@ class NotificationService {
     try {
       const perm = await Notification.requestPermission();
       this.permission = perm;
-      if (perm !== 'granted') {
-        console.warn('[Notif] Permission not granted:', perm);
-      }
       return perm === 'granted';
     } catch (err) {
       console.warn('[Notif] requestPermission error:', err);
@@ -37,7 +74,40 @@ class NotificationService {
   }
 
   async send(title, options = {}) {
-    // Refresh cached permission state
+    // 1. Native Android Notification Center
+    if (this.isNative) {
+      try {
+        const hasPerm = await this.requestPermission();
+        if (!hasPerm) {
+          console.log('[Notif] Native permission not granted.');
+          return;
+        }
+
+        if (!this.channelCreated) {
+          await this.initNativeChannel();
+        }
+
+        const notifId = Math.floor(Math.random() * 2147483647);
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: notifId,
+              title: title,
+              body: options.body || '',
+              channelId: 'log-notifications',
+              schedule: { at: new Date(Date.now() + 100) },
+              smallIcon: 'ic_launcher'
+            }
+          ]
+        });
+        console.log('[Notif] Native notification posted to Android center:', title);
+        return;
+      } catch (err) {
+        console.warn('[Notif] Native notification schedule failed:', err);
+      }
+    }
+
+    // 2. Web / PWA fallback
     if (this.supported) this.permission = Notification.permission;
 
     if (!this.supported || this.permission !== 'granted') {
@@ -46,17 +116,17 @@ class NotificationService {
     }
 
     const defaultOptions = {
-      icon: '/icon-192.svg',
-      badge: '/icon-192.svg',
+      icon: '/log-logo.png',
+      badge: '/log-logo.png',
       vibrate: [200, 100, 200],
       requireInteraction: false,
       silent: false,
-      tag: 'system-os-directive'
+      tag: 'log-directive'
     };
 
     const finalOptions = { ...defaultOptions, ...options };
 
-    // Prefer SW showNotification — supports mobile PWA badge + better mobile support
+    // ServiceWorker showNotification
     if ('serviceWorker' in navigator) {
       try {
         const reg = await navigator.serviceWorker.ready;
@@ -70,7 +140,7 @@ class NotificationService {
       }
     }
 
-    // Fallback: direct Notification API (works on desktop even without SW)
+    // Fallback: direct Notification API
     try {
       const n = new Notification(title, finalOptions);
       console.log('[Notif] Sent via Notification API:', title);
@@ -82,4 +152,3 @@ class NotificationService {
 }
 
 export const notifier = new NotificationService();
-

@@ -57,3 +57,12 @@ ehthumbs.db
 .cache/
 .temp/
 .tmp/
+
+# Android & Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+
