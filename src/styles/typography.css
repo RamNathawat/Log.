@@ -1,0 +1,75 @@
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background-color: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  font-size: 14px;
+  letter-spacing: -0.008em;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+}
+
+/* Editorial section labels */
+.telemetry {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.telemetry-dark {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* Hierarchy */
+h1, h2, h3, h4 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-feature-settings: 'kern' 1, 'liga' 1;
+}
+
+.title-xl {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.title-lg {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.title-md {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.title-sm {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.text-muted {
+  color: var(--color-text-secondary);
+}
+
+.text-tertiary {
+  color: var(--color-text-tertiary);
+}

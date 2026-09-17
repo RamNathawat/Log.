@@ -1,0 +1,72 @@
+:root {
+  /* ─── Apple Hardware B&W Palette — pure, high-contrast, iconic ─────────── */
+  --color-canvas: #F4F4F2;
+  --color-surface-card: #FFFFFF;
+  --color-surface-subtle: #F0F0ED;
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-inset: #EEEEEC;
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #525250;
+  --color-text-tertiary: #8E8E8A;
+  --color-text-inverse: #FFFFFF;
+
+  /* Borders — Apple thick black borders & precision dividers */
+  --color-border: #000000;
+  --color-border-subtle: #E2E2DE;
+  --color-border-strong: #000000;
+  --color-border-dark: #000000;
+
+  --color-button-bg: #000000;
+  --color-button-text: #FFFFFF;
+  --color-button-secondary-bg: #FFFFFF;
+  --color-button-secondary-text: #000000;
+
+  --color-danger: #B83832;
+  --color-danger-bg: #FBF0EF;
+
+  /* ─── Typography: Apple-grade Display & Mono ─────────────────────────────── */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', 'Courier New', monospace;
+
+  /* ─── Spacing ─────────────────────────────────────────────────────────────── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* ─── Squircles: Apple Continuous Curvature Radii ─────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;        /* Apple squircle card radius */
+  --radius-card: 24px;      /* Apple squircle card radius */
+  --radius-dock: 32px;      /* Floating dock squircle radius */
+  --radius-btn: 14px;       /* Tactile squircle button */
+  --radius-pill: 9999px;
+
+  /* ─── Borders: Thick Rounded Black Borders (Apple Hardware Style) ────────── */
+  --border-editorial: 2px solid #000000;
+  --border-card: 2.25px solid #000000;
+  --border-nav: 2.25px solid #000000;
+  --border-hairline: 1px solid #E2E2DE;
+  --border-strong: 2px solid #000000;
+  --border-solid-dark: 2px solid #000000;
+
+  /* ─── Elevation ───────────────────────────────────────────────────────────── */
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.08);
+  --shadow-dock: 0 16px 40px rgba(0, 0, 0, 0.14), 0 2px 10px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.25);
+
+  /* ─── Layout ──────────────────────────────────────────────────────────────── */
+  --touch-target-min: 44px;
+  --max-content-width: 480px;
+
+  /* ─── Animations ──────────────────────────────────────────────────────────── */
+  --transition-fast: 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
