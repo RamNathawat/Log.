@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Log.</string>
     <string name="title_activity_main">Log.</string>
-    <string name="package_name">com.do.lifestyle</string>
-    <string name="custom_url_scheme">com.do.lifestyle</string>
+    <string name="package_name">com.ramnathawat.log</string>
+    <string name="custom_url_scheme">com.ramnathawat.log</string>
 </resources>

@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.do.lifestyle"
+    namespace = "com.ramnathawat.log"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.do.lifestyle"
+        applicationId "com.ramnathawat.log"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

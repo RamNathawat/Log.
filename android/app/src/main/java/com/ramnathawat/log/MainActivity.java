@@ -1,4 +1,4 @@
-package com.do.lifestyle;
+package com.ramnathawat.log;
 
 import com.getcapacitor.BridgeActivity;
 
