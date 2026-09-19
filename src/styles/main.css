@@ -507,7 +507,7 @@ html, body {
 .add-task-submit-btn:hover { opacity: 0.82; }
 .add-task-submit-btn:active { transform: scale(0.93); }
 
-/* ─── Recreation Banner (redesigned) ─────────────────────────────────────── */
+/* ─── Recreation Banner (Locked: white-grey | Unlocked: black dominant) ───── */
 .rec-banner {
   display: flex;
   align-items: center;
@@ -515,51 +515,35 @@ html, body {
   padding: 14px 18px;
   border-radius: 18px;
   margin-top: 14px;
-  transition: all var(--transition-smooth);
-  border: 1.5px solid var(--color-border-subtle);
+  transition: background-color var(--transition-smooth), border-color var(--transition-smooth), color var(--transition-smooth), box-shadow var(--transition-smooth);
 }
 
+/* Locked state: original white-grey card */
 .rec-banner--locked {
   background-color: var(--color-surface-card);
-}
-
-.rec-banner--unlocked {
-  background-color: var(--color-surface-subtle);
-  border-color: var(--color-border-subtle);
-}
-
-.rec-banner-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.rec-banner-icon {
-  flex-shrink: 0;
+  border: 1.5px solid var(--color-border-subtle);
   color: var(--color-text-primary);
-  stroke-width: 1.6;
 }
 
-.rec-banner-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.rec-banner--locked .rec-banner-icon {
+  color: var(--color-text-primary);
+  stroke-width: 2.6;
 }
 
-.rec-banner-title {
-  font-size: 13px;
+.rec-banner--locked .rec-banner-title {
+  color: var(--color-text-primary);
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--color-text-primary);
   letter-spacing: -0.015em;
 }
 
-.rec-banner-sub {
-  font-size: 11px;
+.rec-banner--locked .rec-banner-sub {
   color: var(--color-text-tertiary);
+  font-size: 11.5px;
   letter-spacing: -0.005em;
 }
 
-.rec-banner-badge {
+.rec-banner-badge--locked {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 500;
@@ -570,6 +554,63 @@ html, body {
   padding: 5px 14px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Unlocked state: black dominant version with white pill */
+.rec-banner--unlocked {
+  background-color: #000000;
+  border: 1.5px solid #000000;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.rec-banner--unlocked .rec-banner-icon {
+  color: #ffffff;
+  stroke-width: 2.6;
+}
+
+.rec-banner--unlocked .rec-banner-title {
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.rec-banner--unlocked .rec-banner-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11.5px;
+  letter-spacing: -0.005em;
+}
+
+.rec-banner-badge--unlocked {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background-color: #ffffff;
+  color: #000000;
+  border-radius: 9999px;
+  padding: 6px 16px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: none;
+}
+
+.rec-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rec-banner-icon {
+  flex-shrink: 0;
+}
+
+.rec-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 /* ─── Progress Bar ────────────────────────────────────────────────────────── */
@@ -875,6 +916,680 @@ html, body {
   letter-spacing: -0.005em;
   font-style: italic;
   line-height: 1.5;
+}
+
+/* ─── Accountability / Neglect Report ─────────────────────────────────────── */
+.neglect-header-sub {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+  line-height: 1.4;
+  max-width: 200px;
+}
+
+.neglect-window-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-bottom: 14px;
+  margin-top: 4px;
+}
+
+/* Overall health badge */
+.neglect-health-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1.5px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.neglect-health--clean {
+  background: transparent;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+
+.neglect-health--warning {
+  background: #FFF8E1;
+  border-color: #F0C040;
+  color: #92400E;
+}
+
+.neglect-health--critical {
+  background: #000000;
+  border-color: #000000;
+  color: #FFFFFF;
+}
+
+.neglect-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Individual neglect card */
+.neglect-card {
+  border-radius: 10px;
+  padding: 14px 14px 12px;
+  border: 1.5px solid;
+}
+
+.neglect-card--info {
+  background: var(--color-surface-inset);
+  border-color: var(--color-border-subtle);
+}
+
+.neglect-card--warning {
+  background: #FFFBEB;
+  border-color: #FCD34D;
+}
+
+.neglect-card--critical {
+  background: #000000;
+  border-color: #000000;
+}
+
+.neglect-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.neglect-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.neglect-card-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.neglect-card--critical .neglect-card-name {
+  color: #FFFFFF;
+}
+
+.neglect-card-cat {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.neglect-card--critical .neglect-card-cat {
+  color: rgba(255,255,255,0.5);
+}
+
+/* Severity badge */
+.neglect-badge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-left: 10px;
+  margin-top: 1px;
+}
+
+.neglect-badge--info {
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+
+.neglect-badge--warning {
+  background: #FCD34D;
+  color: #78350F;
+}
+
+.neglect-badge--critical {
+  background: #FFFFFF;
+  color: #000000;
+}
+
+/* The honest message */
+.neglect-message {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.neglect-card--critical .neglect-message {
+  color: rgba(255,255,255,0.75);
+}
+
+/* Stats row inside card */
+.neglect-stats-row {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.neglect-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: 14px;
+}
+
+.neglect-stat + .neglect-stat {
+  padding-left: 14px;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.neglect-card--critical .neglect-stat + .neglect-stat {
+  border-color: rgba(255,255,255,0.15);
+}
+
+.neglect-stat-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.neglect-card--critical .neglect-stat-value {
+  color: #FFFFFF;
+}
+
+.neglect-stat-label {
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+}
+
+.neglect-card--critical .neglect-stat-label {
+  color: rgba(255,255,255,0.45);
+}
+
+/* Activity dot track */
+.neglect-track {
+  display: flex;
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+
+.neglect-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.neglect-dot--missed {
+  background: rgba(0,0,0,0.85);
+}
+
+.neglect-dot--ok {
+  background: var(--color-border-subtle);
+}
+
+.neglect-card--critical .neglect-dot--missed {
+  background: #FFFFFF;
+}
+
+.neglect-card--critical .neglect-dot--ok {
+  background: rgba(255,255,255,0.15);
+}
+
+.neglect-card--warning .neglect-dot--missed {
+  background: #D97706;
+}
+
+/* Clean state */
+.neglect-clean-state {
+  text-align: center;
+  padding: 20px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.neglect-clean-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-surface-inset);
+  border: 1.5px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.neglect-clean-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.neglect-clean-sub {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  letter-spacing: -0.005em;
+}
+
+/* ─── Combined Swipeable Card (Attributes ↔ Accountability) ──────────────── */
+.combined-card {
+  /* overflow stays default — clipping is handled by .combined-panels-clip */
+}
+
+/* Tab bar */
+.combined-tabs {
+  display: flex;
+  gap: 0;
+  position: relative;
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  margin-bottom: 12px;
+}
+
+.combined-tab {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.combined-tab--active {
+  color: var(--color-text-primary);
+}
+
+/* Sliding pill indicator */
+.combined-tab-indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: var(--color-surface-card);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04);
+  transition: transform var(--transition-smooth), width var(--transition-smooth);
+  pointer-events: none;
+}
+
+/* Dot on accountability tab when there are issues */
+.acct-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.acct-tab-dot--clean   { background: #4ADE80; }
+.acct-tab-dot--warning { background: #FBBF24; }
+.acct-tab-dot--critical { background: #000000; }
+
+/* Clip + track */
+.combined-panels-clip {
+  overflow: hidden;
+  width: 100%;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.combined-panels-clip:active {
+  cursor: grabbing;
+}
+
+.combined-panels-track {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  transform: translateX(0%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.combined-panel {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Pager dots */
+.combined-pager {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.pager-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-border-subtle);
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.pager-dot--active {
+  background: var(--color-text-primary);
+  transform: scale(1.2);
+}
+
+/* ─── Accountability Panel (redesigned to match app token system) ─────────── */
+.acct-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.acct-window-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* Overall status chip */
+.acct-status-chip {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid;
+}
+
+.acct-status--clean {
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.acct-status--warning {
+  border-color: #D97706;
+  color: #92400E;
+  background: #FEF3C7;
+}
+
+.acct-status--critical {
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+  background: transparent;
+}
+
+/* Clean state */
+.acct-clean {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 12px;
+}
+
+.acct-clean-check {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-surface-inset);
+  border: 1.5px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.acct-clean-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.acct-clean-sub {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  letter-spacing: -0.005em;
+  margin-top: 1px;
+}
+
+/* ─── Accountability List (Spacious & Minimal) ────────────────────────── */
+.acct-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+.acct-item {
+  display: flex;
+  position: relative;
+  padding: 14px 16px;
+  background: var(--color-surface-card);
+  transition: background var(--transition-fast);
+}
+
+.acct-item + .acct-item {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Left accent stripe */
+.acct-item-accent {
+  width: 3.5px;
+  border-radius: var(--radius-pill);
+  margin-right: 14px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.acct-item-accent--info     { background: var(--color-border); }
+.acct-item-accent--warning  { background: #F59E0B; }
+.acct-item-accent--critical { background: var(--color-text-primary); }
+
+.acct-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Left: Problem definition */
+.acct-item-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.acct-item-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.acct-item-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acct-item-meta {
+  font-size: 10.5px;
+  color: var(--color-text-tertiary);
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.acct-item-miss-stat {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  letter-spacing: -0.01em;
+}
+
+.acct-item-msg {
+  font-size: 11.5px;
+  font-weight: 450;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+}
+
+/* Impact toggle & drawer */
+.acct-impact-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  align-self: flex-start;
+}
+
+.acct-impact-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.acct-toggle-chevron {
+  transition: transform var(--transition-fast);
+}
+
+.acct-impact-toggle--open .acct-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.acct-impact-drawer {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease;
+}
+
+.acct-impact-drawer--open {
+  max-height: 30px;
+  opacity: 1;
+  margin-top: 4px;
+}
+
+.acct-impact-chip-loss {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #DC2626;
+  letter-spacing: -0.01em;
+}
+
+/* Right: Circular Recovery Gauge */
+.acct-item-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.acct-recovery-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.acct-recovery-ring-wrap {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.acct-recovery-ring-wrap svg {
+  display: block;
+}
+
+.acct-recovery-val {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.acct-recovery-lbl {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.acct-ring-fill--complete {
+  stroke: var(--color-text-primary) !important;
 }
 
 /* ─── 7-Day Heatmap ─────────────────────────────────────────────────────────  */

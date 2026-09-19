@@ -11,7 +11,7 @@ export function getInitialState() {
   return {
     date: todayStr,
     character: {
-      name: 'Hunter',
+      name: 'Ram',
       level: CONFIG.STARTING_LEVEL, // Level 1
       xp: CONFIG.STARTING_XP,       // 0 XP
       attributes: { ...CONFIG.STARTING_ATTRIBUTES }

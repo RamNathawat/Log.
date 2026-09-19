@@ -146,6 +146,108 @@ window.resetTest = () => {
   store.notify();
   console.log('🔄 Tasks reset to normal.');
 };
+window.simulateNextDay = () => {
+  store.simulateNextDay();
+  console.log('📅 Advanced date by 1 day! Custom tasks cleared unless postponed.');
+};
+
+/**
+ * Seed realistic, randomized habit history over the last N days.
+ * Simulates genuine human variance: some days the user is dialed in,
+ * some days specific habits slip or get postponed.
+ * @param {Object} [options]
+ * @param {number} [options.days=14] - lookback window
+ * @param {Object} [options.probabilities] - miss probability per task ID (0.0 to 1.0)
+ */
+window.simulateNeglect = (options = {}) => {
+  const {
+    days = 14,
+    probabilities = {
+      workout: 0.65,    // frequently missed (~9/14 days) -> Critical
+      reading: 0.40,    // moderately missed (~5-6/14 days) -> Flagged/Warning
+      outreach: 0.25,   // occasionally missed (~3-4/14 days) -> Watch
+      dishes: 0.10      // rarely missed (~1/14 days)
+    },
+    recentHits = { workout: 2, reading: 1 } // simulate that user completed the last N sessions
+  } = options;
+
+  const state = store.state;
+  if (!state.stats) state.stats = { currentStreak: 0, longestStreak: 0, totalDaysTracked: 0, dailyLogs: {} };
+  if (!state.stats.dailyLogs) state.stats.dailyLogs = {};
+
+  const anchorDate = state.date ? new Date(state.date + 'T12:00:00') : new Date();
+  const summary = {};
+
+  let currentStreak = 0;
+  let maxStreak = 0;
+  let tempStreak = 0;
+
+  for (let i = days; i >= 1; i--) {
+    const d = new Date(anchorDate);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+
+    const totalDue = 5;
+    const missedToday = [];
+    const postponedToday = [];
+
+    // Evaluate each habit against its probability
+    Object.entries(probabilities).forEach(([taskId, prob]) => {
+      const isProtectedRecentHit = recentHits[taskId] && i <= recentHits[taskId];
+      if (!isProtectedRecentHit && Math.random() < prob) {
+        missedToday.push(taskId);
+        if (!summary[taskId]) summary[taskId] = { missed: 0, skipped: 0 };
+        summary[taskId].missed++;
+
+        // 35% chance the user actively postponed/skipped instead of forgetting
+        if (Math.random() < 0.35) {
+          postponedToday.push(taskId);
+          summary[taskId].skipped++;
+        }
+      }
+    });
+
+    const completed = Math.max(0, totalDue - missedToday.length);
+    const completionRate = Math.round((completed / totalDue) * 100);
+
+    // Track streaks
+    if (completionRate >= 80) {
+      tempStreak++;
+      if (tempStreak > maxStreak) maxStreak = tempStreak;
+    } else {
+      tempStreak = 0;
+    }
+
+    state.stats.dailyLogs[key] = {
+      totalDue,
+      completed,
+      completionRate,
+      questStatus: completionRate >= 80 ? 'COMPLETED' : 'FAILED',
+      missedCoreIds: missedToday,
+      skippedCoreIds: postponedToday
+    };
+  }
+
+  currentStreak = tempStreak;
+  state.stats.totalDaysTracked = Object.keys(state.stats.dailyLogs).length;
+  state.stats.currentStreak = currentStreak;
+  state.stats.longestStreak = Math.max(maxStreak, currentStreak);
+
+  store.notify();
+
+  console.log(`🎲 Seeded ${days} days with randomized human variance.`);
+  console.table(summary);
+  console.log('👉 Head to the Review tab (or swipe to Accountability) to view results!');
+};
+
+/** Remove all seeded neglect history and reset dailyLogs. */
+window.clearNeglect = () => {
+  store.state.stats.dailyLogs = {};
+  store.state.stats.totalDaysTracked = 0;
+  store.state.stats.currentStreak = 0;
+  store.notify();
+  console.log('🧹 Cleared all daily log history.');
+};
 
 // Prompt for notification permission on initial boot
 setTimeout(() => {

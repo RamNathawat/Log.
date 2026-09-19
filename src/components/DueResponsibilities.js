@@ -169,18 +169,17 @@ export function renderDueResponsibilities(
 
     <div class="rec-banner ${rec.isUnlocked ? 'rec-banner--unlocked' : 'rec-banner--locked'}">
       <div class="rec-banner-left">
-        <svg class="rec-banner-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-          <line x1="9" y1="9" x2="9.01" y2="9"></line>
-          <line x1="15" y1="9" x2="15.01" y2="9"></line>
+        <svg class="rec-banner-icon" width="28" height="28" viewBox="0 0 26 26" fill="none" stroke="${rec.isUnlocked ? '#ffffff' : 'currentColor'}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5.5 10.5 C6.8 7.5, 9.2 7.5, 10.5 10.5"/>
+          <path d="M15.5 10.5 C16.8 7.5, 19.2 7.5, 20.5 10.5"/>
+          <path d="M6.5 15.5 C8.5 20.5, 17.5 20.5, 19.5 15.5"/>
         </svg>
         <div class="rec-banner-text">
           <div class="rec-banner-title">${recTitle}</div>
           <div class="rec-banner-sub">${recSub}</div>
         </div>
       </div>
-      <span class="rec-banner-badge">${rec.isUnlocked ? 'Unlocked' : 'Locked'}</span>
+      <span class="rec-banner-badge ${rec.isUnlocked ? 'rec-banner-badge--unlocked' : 'rec-banner-badge--locked'}">${rec.isUnlocked ? 'UNLOCKED' : 'Locked'}</span>
     </div>
   `;
 
@@ -223,7 +222,7 @@ export function renderDueResponsibilities(
             </div>
             <div class="action-sheet-item-text">
               <span class="action-sheet-item-label">Skip today</span>
-              <span class="action-sheet-item-sub">Carries this task to tomorrow</span>
+              <span class="action-sheet-item-sub">Carries to tomorrow (-1 WIL, -1 LIFE)</span>
             </div>
           </button>
         ` : `
@@ -235,7 +234,7 @@ export function renderDueResponsibilities(
             </div>
             <div class="action-sheet-item-text">
               <span class="action-sheet-item-label">Do it now</span>
-              <span class="action-sheet-item-sub">Pull it back — get it done today</span>
+              <span class="action-sheet-item-sub">Pull it back — get it done (+1 WIL, +1 LIFE)</span>
             </div>
           </button>
         `}

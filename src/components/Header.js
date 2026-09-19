@@ -20,7 +20,7 @@ export function renderHeader(state, onAction) {
       <div class="app-header-left">
         <div class="app-logo">Log.</div>
         <div class="app-greeting">
-          Hey, ${name}
+          Hey, Ram
           <svg class="greeting-smile" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>

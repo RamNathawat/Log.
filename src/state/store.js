@@ -152,6 +152,7 @@ class Store {
 
   /**
    * Records stats for the specified date before rolling over to the next day.
+   * Also tracks which specific core task IDs were missed for neglect analysis.
    */
   _recordDayStats(dateStr) {
     if (!this.state.stats) {
@@ -173,11 +174,21 @@ class Store {
     const completionRate = totalDue > 0 ? Math.round((totalCompleted / totalDue) * 100) : 0;
     const questStatus = this.state.sideQuestState?.status || 'AVAILABLE';
 
+    // Track which specific core task IDs were due but NOT completed
+    const missedCoreIds = dueList
+      .filter(item => !this.state.dailyResponsibilities[item.id]?.completed)
+      .map(item => item.id);
+
+    // Track which core task IDs were explicitly postponed (skipped)
+    const skippedCoreIds = Object.keys(this.state.postponedCoreTasks || {});
+
     this.state.stats.dailyLogs[dateStr] = {
       totalDue,
       completed: totalCompleted,
       completionRate,
-      questStatus
+      questStatus,
+      missedCoreIds,     // due but not done (missed + skipped combined)
+      skippedCoreIds     // explicitly postponed
     };
 
     this.state.stats.totalDaysTracked = Object.keys(this.state.stats.dailyLogs).length;
@@ -274,6 +285,7 @@ class Store {
     cur.setDate(cur.getDate() + 1);
     const nextDateStr = cur.toISOString().slice(0, 10);
     this.rolloverToDate(nextDateStr);
+    this.notify();
   }
 
   addLog(type, text) {
@@ -375,7 +387,14 @@ class Store {
     this.state.customTasks = tasks.map(t =>
       t.id === id ? { ...t, postponed: true } : t
     );
-    this.addLog('TASK_POSTPONED', `Postponed: "${task.name}" (day ${(task.postponedDays || 0) + 1})`);
+
+    // Consequence: deduct WIL and LIFE
+    this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+      this.state.character.attributes,
+      { WIL: CONFIG.WIL_POSTPONE_PENALTY, LIFE: CONFIG.LIFE_POSTPONE_PENALTY }
+    );
+
+    this.addLog('TASK_POSTPONED', `Postponed: "${task.name}" (${CONFIG.WIL_POSTPONE_PENALTY} WIL, ${CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
     this.notify();
   }
 
@@ -425,7 +444,14 @@ class Store {
       ...(this.state.postponedCoreTasks || {}),
       [id]: { postponedDays: existing ? existing.postponedDays : 1 }
     };
-    this.addLog('CORE_TASK_POSTPONED', `Postponed core task: ${id} (day ${existing ? existing.postponedDays + 1 : 1})`);
+
+    // Consequence: deduct WIL and LIFE
+    this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+      this.state.character.attributes,
+      { WIL: CONFIG.WIL_POSTPONE_PENALTY, LIFE: CONFIG.LIFE_POSTPONE_PENALTY }
+    );
+
+    this.addLog('CORE_TASK_POSTPONED', `Postponed core task: ${id} (${CONFIG.WIL_POSTPONE_PENALTY} WIL, ${CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
     this.notify();
   }
 
@@ -433,7 +459,14 @@ class Store {
     const updated = { ...(this.state.postponedCoreTasks || {}) };
     delete updated[id];
     this.state.postponedCoreTasks = updated;
-    this.addLog('CORE_TASK_UNSKIPPED', `Unskipped core task: ${id}`);
+
+    // Restore deducted WIL and LIFE
+    this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+      this.state.character.attributes,
+      { WIL: -CONFIG.WIL_POSTPONE_PENALTY, LIFE: -CONFIG.LIFE_POSTPONE_PENALTY }
+    );
+
+    this.addLog('CORE_TASK_UNSKIPPED', `Unskipped core task: ${id} (+${-CONFIG.WIL_POSTPONE_PENALTY} WIL, +${-CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
     this.notify();
   }
 
@@ -446,7 +479,14 @@ class Store {
         ? { ...t, postponed: false, postponedDays: Math.max(0, (t.postponedDays || 1) - 1) }
         : t
     );
-    this.addLog('TASK_UNSKIPPED', `Unskipped: "${task.name}"`);
+
+    // Restore deducted WIL and LIFE
+    this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+      this.state.character.attributes,
+      { WIL: -CONFIG.WIL_POSTPONE_PENALTY, LIFE: -CONFIG.LIFE_POSTPONE_PENALTY }
+    );
+
+    this.addLog('TASK_UNSKIPPED', `Unskipped: "${task.name}" (+${-CONFIG.WIL_POSTPONE_PENALTY} WIL, +${-CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
     this.notify();
   }
 

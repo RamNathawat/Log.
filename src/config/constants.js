@@ -35,6 +35,10 @@ export const CONFIG = {
   WIL_CORE_TASK_BOOST: 2,
   WIL_UNFULFILLED_DAY_PENALTY: -6,
 
+  // Postpone Consequences
+  WIL_POSTPONE_PENALTY: -1,
+  LIFE_POSTPONE_PENALTY: -1,
+
   // Attribute attribution weights per responsibility
   RESPONSIBILITY_ATTRIBUTE_WEIGHTS: {
     'workout': { STR: 1.2, WIL: 0.4 },

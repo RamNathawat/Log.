@@ -35,6 +35,10 @@ export class RecurrenceEngine {
     return true;
   }
 
+  static isDueOnDate(responsibility, targetDate = new Date()) {
+    return this.isDue(responsibility, targetDate);
+  }
+
   /**
    * Returns all responsibilities that are currently due on the given date.
    * @param {Date} targetDate 
