@@ -202,6 +202,9 @@ export function renderDueResponsibilities(
       ? dueList.find(t => t.id === taskId)?.name || taskId
       : task?.name || taskId;
 
+    // Remove any existing active action sheets first
+    document.querySelectorAll('.action-sheet-backdrop').forEach(b => b.remove());
+
     // Build sheet
     const backdrop = document.createElement('div');
     backdrop.className = 'action-sheet-backdrop';
@@ -302,37 +305,58 @@ export function renderDueResponsibilities(
   function attachTaskEvents(row, type) {
     let pressTimer = null;
     let didLongPress = false;
+    let lastLongPressTime = 0;
     let startX = 0, startY = 0;
-    const THRESHOLD = 6;
+    const THRESHOLD = 8;
 
-    // Desktop: right-click → postpone sheet
+    // Desktop: right-click → postpone sheet (suppressed if touch long-press just fired)
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (Date.now() - lastLongPressTime < 800) return; // Prevent double trigger from touch
       didLongPress = true;
+      lastLongPressTime = Date.now();
       showPostponeSheet(row.dataset.id, type);
     });
 
-    // Mobile/touch: long-press → postpone sheet
+    // Touch & Pointer: long-press → postpone sheet
     row.addEventListener('pointerdown', (e) => {
+      if (e.button && e.button !== 0) return; // Only primary button / touch
       didLongPress = false;
-      startX = e.clientX; startY = e.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
+
       pressTimer = setTimeout(() => {
         didLongPress = true;
+        lastLongPressTime = Date.now();
         haptics.impactMedium?.();
         showPostponeSheet(row.dataset.id, type);
-      }, 500);
+      }, 480);
     });
-    row.addEventListener('pointerup',     () => clearTimeout(pressTimer));
-    row.addEventListener('pointercancel', () => clearTimeout(pressTimer));
+
+    function cancelPress() {
+      clearTimeout(pressTimer);
+    }
+
+    row.addEventListener('pointerup', () => {
+      cancelPress();
+      if (didLongPress) {
+        setTimeout(() => { didLongPress = false; }, 150);
+      }
+    });
+    row.addEventListener('pointercancel', () => {
+      cancelPress();
+      didLongPress = false;
+    });
     row.addEventListener('pointermove', (e) => {
-      if (Math.abs(e.clientX - startX) > THRESHOLD || Math.abs(e.clientY - startY) > THRESHOLD)
-        clearTimeout(pressTimer);
+      if (Math.abs(e.clientX - startX) > THRESHOLD || Math.abs(e.clientY - startY) > THRESHOLD) {
+        cancelPress();
+      }
     });
 
     // Normal click = toggle
     row.addEventListener('click', (e) => {
       if (e.target.closest('.task-remove-btn')) return;
-      if (didLongPress) return;
+      if (didLongPress || Date.now() - lastLongPressTime < 400) return;
       haptics.impactLight?.();
       if (type === 'core') onToggle(row.dataset.id);
       else onToggleCustomTask(row.dataset.id);
