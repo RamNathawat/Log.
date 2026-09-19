@@ -13,100 +13,118 @@ export function renderSideQuestDirective(state, onAction) {
 
   if (isPending || !quest) {
     element.innerHTML = `
-      <div class="section-label" style="margin-bottom: 8px;">Daily Challenge</div>
-      <div class="card" style="padding: 20px 22px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-          <span class="telemetry">Monitoring for Signals</span>
+      <div class="challenge-card card">
+        <div class="challenge-meta-row">
+          <span class="section-label">Daily Challenge</span>
           <span class="telemetry">Standby</span>
         </div>
-        <div style="text-align: center; padding: 20px 0;">
-          <div style="font-size: 18px; font-weight: 700; color: var(--color-text-secondary); margin-bottom: 8px;">No Active Directives</div>
-          <p style="font-size: 13.5px; color: var(--color-text-tertiary); margin: 0; line-height: 1.55;">
-            Challenges are issued at random intervals between 06:00 and 00:00. Maintain readiness.
-          </p>
+        <div class="challenge-empty">
+          <div class="challenge-empty-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="challenge-empty-title">No Active Challenge</div>
+          <p class="challenge-empty-sub">Issued at random between 06:00 – 00:00. Stay ready.</p>
         </div>
       </div>
     `;
     return element;
   }
 
-  // Action area
+  // ── Action area ──────────────────────────────────────────────────────────
   let actionHtml = '';
 
   if (questStatus === 'AVAILABLE') {
     actionHtml = `
-      <div style="display: flex; gap: 8px; margin-top: 18px;">
+      <div class="challenge-actions">
         <button id="btn-accept-quest" class="btn-primary" style="flex: 1;">Accept Challenge</button>
-        <button id="btn-decline-quest" class="btn-secondary" style="padding: 12px 18px;">Pass</button>
+        <button id="btn-decline-quest" class="challenge-pass-btn">Pass</button>
       </div>
-      <p class="telemetry" style="margin-top: 10px; text-align: center;">Accepting is a commitment to yourself. Passing is neutral.</p>
+      <p class="challenge-micro-note">A commitment to yourself — passing is neutral.</p>
     `;
   } else if (questStatus === 'ACCEPTED') {
     actionHtml = `
-      <div class="commitment-bar" style="margin-top: 16px;">
-        <span class="telemetry-dark">Commitment Active — Self-promise in effect</span>
+      <div class="challenge-commitment-bar">
+        <div class="challenge-commitment-dot"></div>
+        <span>Commitment active — self-promise in effect</span>
       </div>
-      <div style="display: flex; gap: 8px; margin-top: 10px;">
-        <button id="btn-complete-quest" class="btn-primary" style="flex: 1;">Mark Completed</button>
-        <button id="btn-fail-quest" class="btn-secondary" style="padding: 12px 18px;">Did Not Finish</button>
+      <div class="challenge-actions" style="margin-top: 10px;">
+        <button id="btn-complete-quest" class="btn-primary" style="flex: 1;">Mark Complete</button>
+        <button id="btn-fail-quest" class="challenge-pass-btn">Didn't Finish</button>
       </div>
     `;
   } else if (questStatus === 'COMPLETED') {
     actionHtml = `
-      <div class="card-inset" style="margin-top: 16px; border-left: 3px solid var(--color-text-primary);">
-        <div class="telemetry-dark" style="margin-bottom: 4px; font-weight: 700;">Challenge Completed</div>
-        <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0; line-height: 1.5;">
-          Promise kept. Personal discipline reinforced.
-        </p>
+      <div class="challenge-result challenge-result--success">
+        <div class="challenge-result-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <div class="challenge-result-text">
+          <div class="challenge-result-title">Challenge Completed</div>
+          <div class="challenge-result-sub">Promise kept. Personal discipline reinforced.</div>
+        </div>
       </div>
     `;
   } else if (questStatus === 'FAILED') {
     actionHtml = `
-      <div class="card-inset" style="margin-top: 16px; border-left: 3px solid var(--color-danger);">
-        <div class="telemetry" style="color: var(--color-danger); margin-bottom: 4px; font-weight: 700;">Challenge Incomplete</div>
-        <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0; line-height: 1.5;">
-          Tomorrow brings a fresh challenge and a clean start.
-        </p>
+      <div class="challenge-result challenge-result--fail">
+        <div class="challenge-result-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </div>
+        <div class="challenge-result-text">
+          <div class="challenge-result-title">Not Completed</div>
+          <div class="challenge-result-sub">Tomorrow brings a fresh challenge and a clean start.</div>
+        </div>
       </div>
     `;
   } else if (questStatus === 'DECLINED') {
     actionHtml = `
-      <div class="card-inset" style="margin-top: 16px;">
-        <div class="telemetry" style="margin-bottom: 4px; font-weight: 700;">Challenge Passed</div>
-        <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0; line-height: 1.5;">
-          Zero penalty. Focus on honoring your daily habits today.
-        </p>
+      <div class="challenge-result">
+        <div class="challenge-result-icon" style="opacity: 0.45;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18M6 6l12 12"></path>
+          </svg>
+        </div>
+        <div class="challenge-result-text">
+          <div class="challenge-result-title">Passed</div>
+          <div class="challenge-result-sub">Zero penalty. Focus on your daily habits today.</div>
+        </div>
       </div>
     `;
   }
 
-  // Top row of card
-  const periodLabel = quest.period && quest.period.endsWith('CHALLENGE_1') ? 'First Challenge' : 'Second Challenge';
-  const topRowHtml = `
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-      <span class="telemetry">${periodLabel}</span>
-      <span class="telemetry">Randomly Intercepted</span>
-    </div>
-  `;
+  const periodLabel = quest.period && quest.period.endsWith('CHALLENGE_1') ? 'Challenge 1' : 'Challenge 2';
 
   element.innerHTML = `
-    <div class="section-label" style="margin-bottom: 8px;">Daily Challenge</div>
-    <div class="card" style="padding: 20px 22px;">
-      ${topRowHtml}
-
-      <!-- Attribute + reward tags -->
-      <div style="display: flex; gap: 6px; margin-bottom: 12px;">
-        <span class="status-badge status-badge-locked">+${quest.attribute}</span>
-        <span class="status-badge status-badge-locked">${quest.rewardLabel}</span>
+    <div class="challenge-card card">
+      <!-- Top meta row -->
+      <div class="challenge-meta-row">
+        <span class="section-label">Daily Challenge</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="challenge-period-badge">${periodLabel}</span>
+        </div>
       </div>
 
-      <!-- Quest title -->
-      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; color: var(--color-text-primary); margin-bottom: 8px;">
-        ${quest.title}
+      <!-- Reward badges -->
+      <div class="challenge-badges">
+        <span class="challenge-badge">+${quest.attribute}</span>
+        <span class="challenge-badge">${quest.rewardLabel}</span>
       </div>
-      <p style="font-size: 13.5px; color: var(--color-text-secondary); margin: 0; line-height: 1.55;">
-        ${quest.description}
-      </p>
+
+      <!-- Quest title + description -->
+      <div class="challenge-title">${quest.title}</div>
+      <p class="challenge-description">${quest.description}</p>
+
+      <!-- Divider -->
+      <div style="height: 1px; background: var(--color-border-subtle); margin: 18px 0;"></div>
 
       ${actionHtml}
     </div>

@@ -39,6 +39,16 @@ class Store {
     if (!this.state.customTasks) {
       this.state.customTasks = [];
       dirty = true;
+    } else {
+      // Ensure all existing custom tasks have postpone fields
+      const migrated = this.state.customTasks.map(t => {
+        if (t.postponedDays === undefined || t.postponed === undefined) {
+          dirty = true;
+          return { ...t, postponed: false, postponedDays: 0 };
+        }
+        return t;
+      });
+      if (dirty) this.state.customTasks = migrated;
     }
     if (!this.state.stats) {
       this.state.stats = {
@@ -212,15 +222,24 @@ class Store {
       this.state.stats.currentStreak = 0;
     }
 
-    // Rollover to new date: reset daily checkboxes, keep all habits & custom tasks
+    // Rollover to new date
     this.state.date = targetDateStr;
     this.state.dailyResponsibilities = {};
 
-    this.state.customTasks = (this.state.customTasks || []).map(t => ({
-      ...t,
-      completed: false,
-      completedAt: null
-    }));
+    // Custom tasks: carry over postponed ones (incrementing their count),
+    // drop everything else (completed or not — they were one-day tasks).
+    const carried = (this.state.customTasks || [])
+      .filter(t => t.postponed && !t.completed)
+      .map(t => ({
+        ...t,
+        completed: false,
+        completedAt: null,
+        postponedDays: (t.postponedDays || 1) + 1,
+        // Reset postponed flag so user must explicitly postpone again
+        postponed: false
+      }));
+
+    this.state.customTasks = carried;
 
     this.state.recreation = {
       isUnlocked: false,
@@ -228,7 +247,7 @@ class Store {
       unlockedAt: null
     };
 
-    this.addLog('DATE_ROLLOVER', `Date transitioned to ${targetDateStr}. Permanent progression and habits preserved.`);
+    this.addLog('DATE_ROLLOVER', `Date transitioned to ${targetDateStr}. ${carried.length} postponed task(s) carried forward.`);
   }
 
   /**
@@ -321,11 +340,26 @@ class Store {
       bg: weight.bg || '#F3F4F6',
       completed: false,
       completedAt: null,
-      addedAt: new Date().toISOString()
+      addedAt: new Date().toISOString(),
+      // Postpone tracking
+      postponed: false,
+      postponedDays: 0  // how many rollovers this task has been carried through
     };
 
     this.state.customTasks = [...(this.state.customTasks || []), task];
     this.addLog('TASK_ADDED', `Added: "${trimmed}" (${weight.category} · +${weight.xp} XP)`);
+    this.notify();
+  }
+
+  postponeCustomTask(id) {
+    const tasks = this.state.customTasks || [];
+    const task = tasks.find(t => t.id === id);
+    if (!task || task.completed) return;
+
+    this.state.customTasks = tasks.map(t =>
+      t.id === id ? { ...t, postponed: true } : t
+    );
+    this.addLog('TASK_POSTPONED', `Postponed: "${task.name}" (day ${(task.postponedDays || 0) + 1})`);
     this.notify();
   }
 

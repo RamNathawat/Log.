@@ -62,7 +62,8 @@ function renderApp() {
       (taskId) => store.toggleResponsibility(taskId),
       (name)   => store.addCustomTask(name),
       (id)     => store.removeCustomTask(id),
-      (id)     => store.toggleCustomTask(id)
+      (id)     => store.toggleCustomTask(id),
+      (id)     => store.postponeCustomTask(id)
     );
 
     // Daily Challenge
@@ -86,15 +87,6 @@ function renderApp() {
     container.appendChild(pillarsScreen);
   }
 
-  // 4. Subtle editorial footer
-  const footer = document.createElement('footer');
-  footer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-top: 28px; padding-top: 16px; border-top: 1.5px solid var(--color-border);';
-
-  footer.innerHTML = `
-    <span class="telemetry">Log. &middot; Local Encrypted</span>
-  `;
-
-  container.appendChild(footer);
   container.appendChild(navigation);
 
   root.appendChild(container);

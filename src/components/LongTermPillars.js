@@ -42,42 +42,36 @@ export function renderLongTermPillars(state) {
   ];
 
   element.innerHTML = `
-    <div class="system-section">
-      <div class="section-label"></div>
-      <div style="margin-bottom: 16px;">
-        <h2 style="font-size: 20px; font-weight: 800; color: var(--color-text-primary); letter-spacing: -0.03em; margin-bottom: 4px;">Pillars of Growth</h2>
-        <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0; line-height: 1.5;">
-          The enduring North Stars guiding your daily habits and challenges.
-        </p>
-      </div>
+    <!-- Vision screen header -->
+    <div class="progress-screen-header" style="margin-bottom: 4px;">
+      <div class="progress-screen-subtitle">Vision</div>
+      <div class="progress-screen-tagline">The enduring North Stars guiding your daily habits.</div>
+    </div>
 
+    <div class="system-section">
       <div style="display: flex; flex-direction: column; gap: 12px;">
         ${pillarsData.map(p => `
-          <div class="card pillar-card" style="padding: 22px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px;">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="pillar-icon">${p.index}</div>
-                <div>
-                  <h3 style="font-size: 16px; font-weight: 700; color: var(--color-text-primary); letter-spacing: -0.02em; line-height: 1.25; margin: 0;">
-                    ${p.title}
-                  </h3>
-                  <span class="telemetry" style="margin-top: 3px; display: block;">${p.subtitle}</span>
+          <div class="pillar-card-new card">
+            <!-- Top row: number + title + attr badges -->
+            <div class="pillar-top-row">
+              <div class="pillar-header-left">
+                <div class="pillar-index">${p.index}</div>
+                <div class="pillar-title-block">
+                  <h3 class="pillar-title">${p.title}</h3>
+                  <span class="telemetry">${p.subtitle}</span>
                 </div>
               </div>
-              <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                ${p.relatedAttributes.map(a => `<span class="status-badge status-badge-locked">+${a}</span>`).join('')}
+              <div class="pillar-badges">
+                ${p.relatedAttributes.map(a => `<span class="pillar-attr-badge">+${a}</span>`).join('')}
               </div>
             </div>
 
-            <p style="font-size: 13px; color: var(--color-text-secondary); margin: 10px 0 14px; line-height: 1.55;">
-              ${p.description}
-            </p>
+            <p class="pillar-description">${p.description}</p>
 
-            <div class="section-divider" style="margin-bottom: 12px;"></div>
-
-            <div>
-              <span class="telemetry" style="margin-bottom: 6px; display: block;">Fueling Habits:</span>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <!-- Divider + fueling habits -->
+            <div class="pillar-habits-section">
+              <span class="telemetry" style="margin-bottom: 8px; display: block;">Fueling Habits</span>
+              <div class="pillar-habits-row">
                 ${p.habits.map(h => `<span class="category-pill pill-neutral">${h}</span>`).join('')}
               </div>
             </div>
