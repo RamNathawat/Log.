@@ -50,6 +50,10 @@ class Store {
       });
       if (dirty) this.state.customTasks = migrated;
     }
+    if (!this.state.postponedCoreTasks) {
+      this.state.postponedCoreTasks = {};
+      dirty = true;
+    }
     if (!this.state.stats) {
       this.state.stats = {
         currentStreak: 0,
@@ -224,10 +228,23 @@ class Store {
 
     // Rollover to new date
     this.state.date = targetDateStr;
+
+    // Core tasks: increment postponedDays for any that weren't completed, clear completed ones
+    const prevDailyResp = this.state.dailyResponsibilities || {};
+    const updatedPostponedCore = {};
+    for (const [id, info] of Object.entries(this.state.postponedCoreTasks || {})) {
+      const wasCompleted = prevDailyResp[id]?.completed;
+      if (!wasCompleted) {
+        // Still unfinished — escalate urgency
+        updatedPostponedCore[id] = { postponedDays: (info.postponedDays || 1) + 1 };
+      }
+      // If completed: drop it (urgency resets)
+    }
+    this.state.postponedCoreTasks = updatedPostponedCore;
+
     this.state.dailyResponsibilities = {};
 
-    // Custom tasks: carry over postponed ones (incrementing their count),
-    // drop everything else (completed or not — they were one-day tasks).
+    // Custom tasks: carry over postponed ones, drop everything else
     const carried = (this.state.customTasks || [])
       .filter(t => t.postponed && !t.completed)
       .map(t => ({
@@ -235,7 +252,6 @@ class Store {
         completed: false,
         completedAt: null,
         postponedDays: (t.postponedDays || 1) + 1,
-        // Reset postponed flag so user must explicitly postpone again
         postponed: false
       }));
 
@@ -247,7 +263,7 @@ class Store {
       unlockedAt: null
     };
 
-    this.addLog('DATE_ROLLOVER', `Date transitioned to ${targetDateStr}. ${carried.length} postponed task(s) carried forward.`);
+    this.addLog('DATE_ROLLOVER', `Date transitioned to ${targetDateStr}. ${carried.length} custom + ${Object.keys(updatedPostponedCore).length} core task(s) carried forward.`);
   }
 
   /**
@@ -400,6 +416,37 @@ class Store {
 
   removeCustomTask(id) {
     this.state.customTasks = (this.state.customTasks || []).filter(t => t.id !== id);
+    this.notify();
+  }
+
+  postponeCoreTask(id) {
+    const existing = this.state.postponedCoreTasks?.[id];
+    this.state.postponedCoreTasks = {
+      ...(this.state.postponedCoreTasks || {}),
+      [id]: { postponedDays: existing ? existing.postponedDays : 1 }
+    };
+    this.addLog('CORE_TASK_POSTPONED', `Postponed core task: ${id} (day ${existing ? existing.postponedDays + 1 : 1})`);
+    this.notify();
+  }
+
+  unskipCoreTask(id) {
+    const updated = { ...(this.state.postponedCoreTasks || {}) };
+    delete updated[id];
+    this.state.postponedCoreTasks = updated;
+    this.addLog('CORE_TASK_UNSKIPPED', `Unskipped core task: ${id}`);
+    this.notify();
+  }
+
+  unskipCustomTask(id) {
+    const tasks = this.state.customTasks || [];
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    this.state.customTasks = tasks.map(t =>
+      t.id === id
+        ? { ...t, postponed: false, postponedDays: Math.max(0, (t.postponedDays || 1) - 1) }
+        : t
+    );
+    this.addLog('TASK_UNSKIPPED', `Unskipped: "${task.name}"`);
     this.notify();
   }
 

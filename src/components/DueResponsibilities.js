@@ -1,9 +1,20 @@
 import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
 import { haptics } from '../services/hapticsService.js';
 
-export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTask, onToggleCustomTask, onPostponeTask) {
+export function renderDueResponsibilities(
+  state,
+  onToggle,
+  onAddTask,
+  onRemoveTask,
+  onToggleCustomTask,
+  onPostponeTask,
+  onPostponeCoreTask,
+  onUnskipTask,
+  onUnskipCoreTask
+) {
   const dueList = RecurrenceEngine.getDueResponsibilities();
   const customTasks = state.customTasks || [];
+  const postponedCore = state.postponedCoreTasks || {};
 
   const completedCore = dueList.filter((item) => state.dailyResponsibilities[item.id]?.completed).length;
   const completedCustom = customTasks.filter(t => t.completed).length;
@@ -13,79 +24,84 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
 
   const progressPct = totalDue > 0 ? Math.round((totalComplete / totalDue) * 100) : 0;
 
-  // Circular ring SVG — shows ✓ in centre when all done
+  // Ring SVG
   const ringRadius = 14;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringOffset = ringCircumference - (progressPct / 100) * ringCircumference;
   const ringHtml = `
     <svg class="today-ring ${allDone ? 'today-ring--done' : ''}" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
       <circle class="today-ring-track" cx="17" cy="17" r="${ringRadius}" fill="none" stroke-width="2.5"/>
-      <circle
-        class="today-ring-fill"
-        cx="17" cy="17" r="${ringRadius}"
-        fill="none"
-        stroke-width="2.5"
-        stroke-dasharray="${ringCircumference}"
-        stroke-dashoffset="${ringOffset}"
-        transform="rotate(-90 17 17)"
-      />
+      <circle class="today-ring-fill" cx="17" cy="17" r="${ringRadius}" fill="none" stroke-width="2.5"
+        stroke-dasharray="${ringCircumference}" stroke-dashoffset="${ringOffset}" transform="rotate(-90 17 17)"/>
       ${allDone ? `<polyline points="11,17 15,21 23,13" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>` : ''}
     </svg>
   `;
 
-  const element = document.createElement('section');
-  element.className = 'system-section section-gap-top';
+  // ── Helper: unified postpone pill for both task types ───────────────────
+  function getPostponePill({ isCore, postponedDays, isPostponed }) {
+    if (isCore) {
+      if (!isPostponed || postponedDays === 0) return '';
+      if (postponedDays === 1) {
+        return `<span class="postpone-pill postpone-pill--orange">skipped today</span>`;
+      }
+      const cls = postponedDays >= 3 ? 'postpone-pill--red' : 'postpone-pill--orange';
+      return `<span class="postpone-pill ${cls}">skipped ${postponedDays}×</span>`;
+    } else {
+      if (!isPostponed && (!postponedDays || postponedDays === 0)) return '';
+      if (isPostponed && (postponedDays === 0 || postponedDays === 1)) {
+        return `<span class="postpone-pill postpone-pill--orange">skipped today</span>`;
+      }
+      const count = postponedDays || 1;
+      const cls = count >= 3 ? 'postpone-pill--red' : 'postpone-pill--orange';
+      return `<span class="postpone-pill ${cls}">skipped ${count}×</span>`;
+    }
+  }
 
   // ── Core task rows ─────────────────────────────────────────────────────────
   const coreTasksHtml = dueList.map((task) => {
     const isDone = Boolean(state.dailyResponsibilities[task.id]?.completed);
     const xp = task.xp || 15;
     const catLabel = task.category || 'Daily';
+    const isPostponed = Boolean(postponedCore[task.id]);
+    const days = postponedCore[task.id]?.postponedDays || 0;
+    const uClass = !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
+    const pill = getPostponePill({ isCore: true, postponedDays: days, isPostponed });
+
     return `
-      <div class="task-item ${isDone ? 'is-completed' : ''}" data-id="${task.id}" data-type="core" role="button" aria-pressed="${isDone}">
+      <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
+           data-id="${task.id}" data-type="core" role="button" aria-pressed="${isDone}">
         <div class="task-left">
           <div class="task-checkbox ${isDone ? 'checked' : ''}">
             ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
           </div>
           <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
             <span class="task-label">${task.name}</span>
-            <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
               <span class="category-pill pill-neutral">${catLabel}</span>
               ${task.frequency === 'alternate-day' ? `<span class="category-pill pill-alt">Alt. Day</span>` : ''}
+              ${pill}
             </div>
           </div>
         </div>
-        <span class="task-xp-tag">+${xp}</span>
+        <div class="task-right">
+          <span class="task-xp-tag">+${xp}</span>
+        </div>
       </div>
     `;
   }).join('');
 
-  // ── Custom task rows with urgency ──────────────────────────────────────────
+  // ── Custom task rows ───────────────────────────────────────────────────────
   const customTasksHtml = customTasks.map((task) => {
     const isDone = Boolean(task.completed);
     const catTag = task.tag || task.category || 'Custom';
     const days = task.postponedDays || 0;
-    const isPostponed = Boolean(task.postponed); // already flagged for tomorrow
-
-    // Urgency class: 0 = none, 1 = orange, 2+ = red
-    const urgencyClass = days === 0 ? '' : days === 1 ? 'postpone-1' : 'postpone-2';
-
-    // Postpone indicator pill
-    let postponePillHtml = '';
-    if (days === 1) {
-      postponePillHtml = `<span class="postpone-pill postpone-pill--orange">postponed 1×</span>`;
-    } else if (days >= 2) {
-      postponePillHtml = `<span class="postpone-pill postpone-pill--red">postponed ${days}×</span>`;
-    }
+    const isPostponed = Boolean(task.postponed);
+    const uClass = (!isPostponed && days === 0) ? '' : (days <= 1 || (isPostponed && days === 0)) ? 'postpone-1' : 'postpone-2';
+    const pill = getPostponePill({ isCore: false, postponedDays: days, isPostponed });
 
     return `
-      <div
-        class="task-item ${isDone ? 'is-completed' : ''} ${urgencyClass}"
-        data-id="${task.id}"
-        data-type="custom"
-        role="button"
-        aria-pressed="${isDone}"
-      >
+      <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
+           data-id="${task.id}" data-type="custom" role="button" aria-pressed="${isDone}">
         <div class="task-left">
           <div class="task-checkbox ${isDone ? 'checked' : ''}">
             ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
@@ -94,16 +110,18 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
             <span class="task-label">${task.name}</span>
             <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
               <span class="category-pill pill-neutral">${catTag}</span>
-              ${postponePillHtml}
-              ${isPostponed && !isDone ? `<span class="postpone-pill postpone-pill--orange" style="opacity:0.7;">carries to tomorrow</span>` : ''}
+              ${pill}
             </div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          <span class="task-xp-tag">+${task.xp}</span>
+        <div class="task-right">
           <button class="task-remove-btn" data-remove-id="${task.id}" title="Remove task" aria-label="Remove ${task.name}">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
           </button>
+          <span class="task-xp-tag">+${task.xp}</span>
         </div>
       </div>
     `;
@@ -111,15 +129,13 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
 
   // Recreation status
   const rec = state.recreation;
-  let recTitle = 'Daily challenge done.';
-  let recSub = "You've earned your leisure time.";
-  if (!rec.isUnlocked) {
-    recTitle = 'Keep going.';
-    recSub = 'Finish your habits to unlock free time.';
-  }
+  const recTitle = rec.isUnlocked ? 'Daily challenge done.' : 'Keep going.';
+  const recSub   = rec.isUnlocked ? "You've earned your leisure time." : 'Finish your habits to unlock free time.';
+
+  const element = document.createElement('section');
+  element.className = 'system-section section-gap-top';
 
   element.innerHTML = `
-    <!-- Today section header -->
     <div class="today-section-header">
       <div class="today-header-left">
         <span class="today-title">Today</span>
@@ -131,25 +147,17 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
       </div>
     </div>
 
-    <!-- Task list -->
     <div class="task-list-flat">
       <div class="responsibilities-list">
         ${coreTasksHtml}
         ${customTasksHtml}
-        ${totalDue === 0 ? `<p style="font-size: 13px; color: var(--color-text-tertiary); padding: 16px 0; letter-spacing: -0.005em;">No habits scheduled. Add one below.</p>` : ''}
+        ${totalDue === 0 ? `<p style="font-size:13px;color:var(--color-text-tertiary);padding:16px 0;">No habits scheduled. Add one below.</p>` : ''}
       </div>
 
-      <!-- Add task row -->
       <div class="add-task-row-v2">
         <span class="add-task-plus" aria-hidden="true">+</span>
-        <input
-          id="add-task-input"
-          class="add-task-input-v2"
-          type="text"
-          placeholder="Add a task..."
-          maxlength="80"
-          autocomplete="off"
-        />
+        <input id="add-task-input" class="add-task-input-v2" type="text"
+               placeholder="Add a task..." maxlength="80" autocomplete="off"/>
         <button id="add-task-btn" class="add-task-submit-btn" aria-label="Add task">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="19" x2="12" y2="5"></line>
@@ -159,7 +167,6 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
       </div>
     </div>
 
-    <!-- Recreation banner -->
     <div class="rec-banner ${rec.isUnlocked ? 'rec-banner--unlocked' : 'rec-banner--locked'}">
       <div class="rec-banner-left">
         <svg class="rec-banner-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -177,58 +184,166 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
     </div>
   `;
 
-  // ── Event: toggle core task ─────────────────────────────────────────────────
-  element.querySelectorAll('.task-item[data-type="core"]').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.task-remove-btn')) return;
-      haptics.impactLight();
-      onToggle(row.dataset.id);
-    });
-  });
+  // ── Bottom action sheet for postpone ──────────────────────────────────────
+  function showPostponeSheet(taskId, type) {
+    const isCore = type === 'core';
+    const task = isCore ? null : customTasks.find(t => t.id === taskId);
+    const isDone = isCore
+      ? Boolean(state.dailyResponsibilities[taskId]?.completed)
+      : Boolean(task?.completed);
 
-  // ── Event: toggle / long-press custom task ──────────────────────────────────
-  element.querySelectorAll('.task-item[data-type="custom"]').forEach((row) => {
+    // Only show for unchecked tasks
+    if (isDone) return;
+
+    const isAlreadyPostponed = isCore
+      ? Boolean(postponedCore[taskId])
+      : Boolean(task?.postponed);
+
+    const taskName = isCore
+      ? dueList.find(t => t.id === taskId)?.name || taskId
+      : task?.name || taskId;
+
+    // Build sheet
+    const backdrop = document.createElement('div');
+    backdrop.className = 'action-sheet-backdrop';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'action-sheet';
+    sheet.innerHTML = `
+      <div class="action-sheet-handle"></div>
+      <div class="action-sheet-title">Task Options</div>
+      <div class="action-sheet-list">
+        ${!isAlreadyPostponed ? `
+          <button class="action-sheet-item" id="as-skip">
+            <div class="action-sheet-item-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 14 4 9 9 4"></polyline>
+                <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label">Skip today</span>
+              <span class="action-sheet-item-sub">Carries this task to tomorrow</span>
+            </div>
+          </button>
+        ` : `
+          <button class="action-sheet-item" id="as-unskip">
+            <div class="action-sheet-item-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label">Do it now</span>
+              <span class="action-sheet-item-sub">Pull it back — get it done today</span>
+            </div>
+          </button>
+        `}
+        ${!isCore ? `
+          <div class="action-sheet-divider"></div>
+          <button class="action-sheet-item" id="as-delete">
+            <div class="action-sheet-item-icon" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label" style="color: #ef4444;">Delete task</span>
+              <span class="action-sheet-item-sub">Permanently remove this custom task</span>
+            </div>
+          </button>
+        ` : ''}
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-tertiary); text-align: center; letter-spacing: -0.005em; padding-bottom: 12px;">
+        "${taskName}"
+      </div>
+      <button class="action-sheet-cancel" id="as-cancel">Cancel</button>
+    `;
+
+    backdrop.appendChild(sheet);
+    document.body.appendChild(backdrop);
+
+    requestAnimationFrame(() => {
+      backdrop.classList.add('visible');
+      sheet.classList.add('visible');
+    });
+
+    function close() {
+      backdrop.classList.remove('visible');
+      sheet.classList.remove('visible');
+      setTimeout(() => backdrop.remove(), 320);
+    }
+
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    sheet.querySelector('#as-cancel').addEventListener('click', close);
+
+    sheet.querySelector('#as-skip')?.addEventListener('click', () => {
+      close();
+      haptics.impactLight?.();
+      if (isCore) onPostponeCoreTask(taskId);
+      else onPostponeTask(taskId);
+    });
+
+    sheet.querySelector('#as-unskip')?.addEventListener('click', () => {
+      close();
+      haptics.impactLight?.();
+      if (isCore) onUnskipCoreTask(taskId);
+      else onUnskipTask(taskId);
+    });
+
+    sheet.querySelector('#as-delete')?.addEventListener('click', () => {
+      close();
+      haptics.impactMedium?.();
+      onRemoveTask(taskId);
+    });
+  }
+
+  // ── Attach interactions to ALL task rows ───────────────────────────────────
+  function attachTaskEvents(row, type) {
     let pressTimer = null;
     let didLongPress = false;
-    let startX = 0;
-    let startY = 0;
-    const MOVE_THRESHOLD = 6; // px — ignore micro-jitter
+    let startX = 0, startY = 0;
+    const THRESHOLD = 6;
 
-    function startPress(e) {
+    // Desktop: right-click → postpone sheet
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      didLongPress = true;
+      showPostponeSheet(row.dataset.id, type);
+    });
+
+    // Mobile/touch: long-press → postpone sheet
+    row.addEventListener('pointerdown', (e) => {
       didLongPress = false;
-      startX = e.clientX;
-      startY = e.clientY;
+      startX = e.clientX; startY = e.clientY;
       pressTimer = setTimeout(() => {
         didLongPress = true;
         haptics.impactMedium?.();
-        showContextMenu(row, row.dataset.id);
+        showPostponeSheet(row.dataset.id, type);
       }, 500);
-    }
+    });
+    row.addEventListener('pointerup',     () => clearTimeout(pressTimer));
+    row.addEventListener('pointercancel', () => clearTimeout(pressTimer));
+    row.addEventListener('pointermove', (e) => {
+      if (Math.abs(e.clientX - startX) > THRESHOLD || Math.abs(e.clientY - startY) > THRESHOLD)
+        clearTimeout(pressTimer);
+    });
 
-    function cancelPress() {
-      clearTimeout(pressTimer);
-    }
-
-    function onMove(e) {
-      const dx = Math.abs(e.clientX - startX);
-      const dy = Math.abs(e.clientY - startY);
-      if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) cancelPress();
-    }
-
-    row.addEventListener('pointerdown', startPress);
-    row.addEventListener('pointerup', cancelPress);
-    row.addEventListener('pointercancel', cancelPress);
-    row.addEventListener('pointermove', onMove);
-
+    // Normal click = toggle
     row.addEventListener('click', (e) => {
       if (e.target.closest('.task-remove-btn')) return;
-      if (didLongPress) return; // long-press already handled
-      haptics.impactLight();
-      onToggleCustomTask(row.dataset.id);
+      if (didLongPress) return;
+      haptics.impactLight?.();
+      if (type === 'core') onToggle(row.dataset.id);
+      else onToggleCustomTask(row.dataset.id);
     });
-  });
+  }
 
-  // ── Event: remove custom task ───────────────────────────────────────────────
+  element.querySelectorAll('.task-item[data-type="core"]').forEach(r => attachTaskEvents(r, 'core'));
+  element.querySelectorAll('.task-item[data-type="custom"]').forEach(r => attachTaskEvents(r, 'custom'));
+
+  // Remove button (custom only)
   element.querySelectorAll('.task-remove-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -237,94 +352,16 @@ export function renderDueResponsibilities(state, onToggle, onAddTask, onRemoveTa
     });
   });
 
-  // ── Add task ────────────────────────────────────────────────────────────────
-  const input = element.querySelector('#add-task-input');
+  // Add task
+  const input  = element.querySelector('#add-task-input');
   const addBtn = element.querySelector('#add-task-btn');
 
   function submitTask() {
     const val = input.value.trim();
-    if (val) {
-      haptics.impactLight?.();
-      onAddTask(val);
-      input.value = '';
-    }
+    if (val) { haptics.impactLight?.(); onAddTask(val); input.value = ''; }
   }
-
   addBtn.addEventListener('click', submitTask);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submitTask();
-  });
-
-  // ── Long-press context menu ─────────────────────────────────────────────────
-  function showContextMenu(row, taskId) {
-    // Remove any existing menu
-    document.querySelector('.task-context-menu')?.remove();
-
-    const task = customTasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    const menu = document.createElement('div');
-    menu.className = 'task-context-menu';
-
-    const isAlreadyPostponed = task.postponed;
-
-    menu.innerHTML = `
-      <button class="task-context-item" id="ctx-complete">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        Mark complete
-      </button>
-      ${!task.completed && !isAlreadyPostponed ? `
-        <div class="task-context-divider"></div>
-        <button class="task-context-item" id="ctx-postpone">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 14 4 9 9 4"></polyline>
-            <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
-          </svg>
-          Postpone to tomorrow
-        </button>
-      ` : ''}
-      <div class="task-context-divider"></div>
-      <button class="task-context-item task-context-item--danger" id="ctx-delete">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4h6v2"></path></svg>
-        Remove task
-      </button>
-    `;
-
-    // Position near the row
-    const rect = row.getBoundingClientRect();
-    menu.style.top = `${rect.top + window.scrollY + rect.height / 2}px`;
-    menu.style.left = `${Math.min(rect.left, window.innerWidth - 220)}px`;
-    menu.style.transformOrigin = 'top left';
-
-    document.body.appendChild(menu);
-
-    // Close on outside click
-    function closeMenu() {
-      menu.remove();
-      document.removeEventListener('pointerdown', onOutside);
-    }
-    function onOutside(e) {
-      if (!menu.contains(e.target)) closeMenu();
-    }
-    setTimeout(() => document.addEventListener('pointerdown', onOutside), 10);
-
-    menu.querySelector('#ctx-complete')?.addEventListener('click', () => {
-      closeMenu();
-      if (!task.completed) onToggleCustomTask(taskId);
-    });
-
-    menu.querySelector('#ctx-postpone')?.addEventListener('click', () => {
-      closeMenu();
-      haptics.impactLight?.();
-      onPostponeTask(taskId);
-    });
-
-    menu.querySelector('#ctx-delete')?.addEventListener('click', () => {
-      closeMenu();
-      haptics.impactMedium?.();
-      onRemoveTask(taskId);
-    });
-  }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitTask(); });
 
   return element;
 }

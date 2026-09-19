@@ -63,7 +63,10 @@ function renderApp() {
       (name)   => store.addCustomTask(name),
       (id)     => store.removeCustomTask(id),
       (id)     => store.toggleCustomTask(id),
-      (id)     => store.postponeCustomTask(id)
+      (id)     => store.postponeCustomTask(id),
+      (id)     => store.postponeCoreTask(id),
+      (id)     => store.unskipCustomTask(id),
+      (id)     => store.unskipCoreTask(id)
     );
 
     // Daily Challenge
@@ -113,6 +116,36 @@ function closeModal() {
 
 store.subscribe(() => renderApp());
 renderApp();
+
+// Dev test helpers accessible from browser console
+window.store = store;
+window.testRedVersion = () => {
+  const sampleCoreId = 'core_deep_work';
+  store.state.postponedCoreTasks = {
+    ...(store.state.postponedCoreTasks || {}),
+    [sampleCoreId]: { postponedDays: 3 }
+  };
+  if (!store.state.customTasks || store.state.customTasks.length === 0) {
+    store.addCustomTask('High Priority Task');
+  }
+  if (store.state.customTasks && store.state.customTasks.length > 0) {
+    store.state.customTasks[0].postponed = true;
+    store.state.customTasks[0].postponedDays = 3;
+  }
+  store.notify();
+  console.log('✅ Red urgency version applied (skipped 3×)!');
+};
+window.resetTest = () => {
+  store.state.postponedCoreTasks = {};
+  if (store.state.customTasks) {
+    store.state.customTasks.forEach(t => {
+      t.postponed = false;
+      t.postponedDays = 0;
+    });
+  }
+  store.notify();
+  console.log('🔄 Tasks reset to normal.');
+};
 
 // Prompt for notification permission on initial boot
 setTimeout(() => {
