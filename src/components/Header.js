@@ -124,6 +124,9 @@ export function renderHeader(state, onAction) {
     backdrop.appendChild(sheet);
     document.body.appendChild(backdrop);
 
+    // Force reflow for silky smooth 60fps hardware accelerated slide-up
+    void sheet.offsetHeight;
+
     // Animate in
     requestAnimationFrame(() => {
       backdrop.classList.add('visible');

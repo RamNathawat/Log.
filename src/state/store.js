@@ -321,6 +321,13 @@ class Store {
     };
 
     if (isCompleted) {
+      // If task was previously skipped/postponed, completing it clears the skipped state
+      if (this.state.postponedCoreTasks?.[id]) {
+        const updated = { ...(this.state.postponedCoreTasks || {}) };
+        delete updated[id];
+        this.state.postponedCoreTasks = updated;
+      }
+
       const xpGained = CONFIG.CORE_RESPONSIBILITY_XP;
       const progress = ProgressionEngine.addXp(this.state.character, xpGained);
       this.state.character = progress.character;
@@ -395,6 +402,7 @@ class Store {
     );
 
     this.addLog('TASK_POSTPONED', `Postponed: "${task.name}" (${CONFIG.WIL_POSTPONE_PENALTY} WIL, ${CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
+    this.evaluateRecreationUnlock();
     this.notify();
   }
 
@@ -406,7 +414,14 @@ class Store {
     const isCompleted = !task.completed;
     this.state.customTasks = tasks.map(t =>
       t.id === id
-        ? { ...t, completed: isCompleted, completedAt: isCompleted ? new Date().toISOString() : null }
+        ? {
+            ...t,
+            completed: isCompleted,
+            completedAt: isCompleted ? new Date().toISOString() : null,
+            // If completed, clear postpone state permanently
+            postponed: isCompleted ? false : t.postponed,
+            postponedDays: isCompleted ? 0 : t.postponedDays
+          }
         : t
     );
 
@@ -435,6 +450,7 @@ class Store {
 
   removeCustomTask(id) {
     this.state.customTasks = (this.state.customTasks || []).filter(t => t.id !== id);
+    this.evaluateRecreationUnlock();
     this.notify();
   }
 
@@ -452,6 +468,7 @@ class Store {
     );
 
     this.addLog('CORE_TASK_POSTPONED', `Postponed core task: ${id} (${CONFIG.WIL_POSTPONE_PENALTY} WIL, ${CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
+    this.evaluateRecreationUnlock();
     this.notify();
   }
 
@@ -467,6 +484,7 @@ class Store {
     );
 
     this.addLog('CORE_TASK_UNSKIPPED', `Unskipped core task: ${id} (+${-CONFIG.WIL_POSTPONE_PENALTY} WIL, +${-CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
+    this.evaluateRecreationUnlock();
     this.notify();
   }
 
@@ -476,7 +494,7 @@ class Store {
     if (!task) return;
     this.state.customTasks = tasks.map(t =>
       t.id === id
-        ? { ...t, postponed: false, postponedDays: Math.max(0, (t.postponedDays || 1) - 1) }
+        ? { ...t, postponed: false, postponedDays: 0 }
         : t
     );
 
@@ -487,6 +505,7 @@ class Store {
     );
 
     this.addLog('TASK_UNSKIPPED', `Unskipped: "${task.name}" (+${-CONFIG.WIL_POSTPONE_PENALTY} WIL, +${-CONFIG.LIFE_POSTPONE_PENALTY} LIFE)`);
+    this.evaluateRecreationUnlock();
     this.notify();
   }
 
@@ -598,9 +617,12 @@ class Store {
     }
 
     const dueList = RecurrenceEngine.getDueResponsibilities();
-    if (dueList.length === 0) return;
+    const postponedCore = this.state.postponedCoreTasks || {};
+    const activeDueList = dueList.filter(item => !postponedCore[item.id]);
 
-    const allDueDone = dueList.every((item) => {
+    if (activeDueList.length === 0) return;
+
+    const allDueDone = activeDueList.every((item) => {
       const rec = this.state.dailyResponsibilities[item.id];
       return rec && rec.completed === true;
     });

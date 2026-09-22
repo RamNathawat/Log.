@@ -16,13 +16,16 @@ export function renderDueResponsibilities(
   const customTasks = state.customTasks || [];
   const postponedCore = state.postponedCoreTasks || {};
 
+  const activeCore = dueList.filter(item => !postponedCore[item.id]);
+  const activeCustom = customTasks.filter(t => !t.postponed);
+
   const completedCore = dueList.filter((item) => state.dailyResponsibilities[item.id]?.completed).length;
   const completedCustom = customTasks.filter(t => t.completed).length;
   const totalComplete = completedCore + completedCustom;
-  const totalDue = dueList.length + customTasks.length;
-  const allDone = totalComplete === totalDue && totalDue > 0;
+  const totalDue = activeCore.length + activeCustom.length;
+  const allDone = totalComplete >= totalDue && totalDue > 0;
 
-  const progressPct = totalDue > 0 ? Math.round((totalComplete / totalDue) * 100) : 0;
+  const progressPct = totalDue > 0 ? Math.min(100, Math.round((totalComplete / totalDue) * 100)) : 0;
 
   // Ring SVG
   const ringRadius = 14;
@@ -39,16 +42,16 @@ export function renderDueResponsibilities(
 
   // ── Helper: unified postpone pill for both task types ───────────────────
   function getPostponePill({ isCore, postponedDays, isPostponed }) {
+    if (!isPostponed) return '';
+
     if (isCore) {
-      if (!isPostponed || postponedDays === 0) return '';
-      if (postponedDays === 1) {
+      if (postponedDays <= 1) {
         return `<span class="postpone-pill postpone-pill--orange">skipped today</span>`;
       }
       const cls = postponedDays >= 3 ? 'postpone-pill--red' : 'postpone-pill--orange';
       return `<span class="postpone-pill ${cls}">skipped ${postponedDays}×</span>`;
     } else {
-      if (!isPostponed && (!postponedDays || postponedDays === 0)) return '';
-      if (isPostponed && (postponedDays === 0 || postponedDays === 1)) {
+      if (postponedDays === 0 || postponedDays === 1) {
         return `<span class="postpone-pill postpone-pill--orange">skipped today</span>`;
       }
       const count = postponedDays || 1;
@@ -96,7 +99,7 @@ export function renderDueResponsibilities(
     const catTag = task.tag || task.category || 'Custom';
     const days = task.postponedDays || 0;
     const isPostponed = Boolean(task.postponed);
-    const uClass = (!isPostponed && days === 0) ? '' : (days <= 1 || (isPostponed && days === 0)) ? 'postpone-1' : 'postpone-2';
+    const uClass = !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
     const pill = getPostponePill({ isCore: false, postponedDays: days, isPostponed });
 
     return `
@@ -265,6 +268,9 @@ export function renderDueResponsibilities(
 
     backdrop.appendChild(sheet);
     document.body.appendChild(backdrop);
+
+    // Force reflow for silky smooth 60fps hardware accelerated slide-up
+    void sheet.offsetHeight;
 
     requestAnimationFrame(() => {
       backdrop.classList.add('visible');

@@ -28,11 +28,15 @@ export function renderProgressScreen(state) {
   // ─── Live completion stats for today ─────────────────────────────────────
   const dueToday = RecurrenceEngine.getDueResponsibilities(anchorDate);
   const customTasks = state.customTasks || [];
-  const totalDueToday = dueToday.length + customTasks.length;
+  const postponedCore = state.postponedCoreTasks || {};
+
+  const activeDueToday = dueToday.filter(item => !postponedCore[item.id]);
+  const activeCustomToday = customTasks.filter(t => !t.postponed);
+  const totalDueToday = activeDueToday.length + activeCustomToday.length;
   const completedToday =
     dueToday.filter(item => state.dailyResponsibilities[item.id]?.completed).length
     + customTasks.filter(t => t.completed).length;
-  const liveTodayRate = totalDueToday > 0 ? Math.round((completedToday / totalDueToday) * 100) : 0;
+  const liveTodayRate = totalDueToday > 0 ? Math.min(100, Math.round((completedToday / totalDueToday) * 100)) : 0;
 
   // ─── 7-day history ────────────────────────────────────────────────────────
   const days = [];
