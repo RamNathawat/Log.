@@ -5,13 +5,17 @@ import { CONFIG } from '../config/constants.js';
  * Starting character level is Level 1.
  * Fitness measurements are default seed placeholders to be calibrated by the user.
  */
-export function getInitialState() {
+export function getInitialState(profile = 'ram') {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const isSister = profile === 'sister';
 
   return {
+    profile: isSister ? 'sister' : 'ram',
+    syncKey: isSister ? 'OS1837' : 'OS2290',
+    siblingSyncKey: isSister ? 'OS2290' : 'OS1837',
     date: todayStr,
     character: {
-      name: 'Ram',
+      name: isSister ? 'Sister' : 'Ram',
       level: CONFIG.STARTING_LEVEL, // Level 1
       xp: CONFIG.STARTING_XP,       // 0 XP
       attributes: { ...CONFIG.STARTING_ATTRIBUTES }
@@ -27,6 +31,10 @@ export function getInitialState() {
     },
     // Track completed responsibilities for today: { [id]: { completed: boolean, completedAt: string | null } }
     dailyResponsibilities: {},
+    // Justified task exemptions (0 penalty excused tasks): { [id]: { reason, category, exemptedAt, status } }
+    taskExemptions: {},
+    // Active task trade proposals / barters: Array<{ id, fromUser, toUser, taskId, taskName, taskType, note, swapTaskId, swapTaskName, status, createdAt }>
+    trades: [],
     // User-added custom tasks persisted across days, reset completion daily
     customTasks: [],
     // Today's Side Quest state

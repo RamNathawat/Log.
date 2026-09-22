@@ -1,4 +1,4 @@
-import { CORE_RESPONSIBILITIES_CONFIG } from '../config/responsibilities.js';
+import { getProfileCoreResponsibilities, RAM_CORE_RESPONSIBILITIES } from '../config/responsibilities.js';
 
 /**
  * Recurrence Engine
@@ -40,21 +40,23 @@ export class RecurrenceEngine {
   }
 
   /**
-   * Returns all responsibilities that are currently due on the given date.
+   * Returns all responsibilities that are currently due on the given date for a profile.
    * @param {Date} targetDate 
+   * @param {string} profile 'ram' | 'sister'
    * @returns {Array}
    */
-  static getDueResponsibilities(targetDate = new Date()) {
-    return CORE_RESPONSIBILITIES_CONFIG.filter((item) => this.isDue(item, targetDate));
+  static getDueResponsibilities(targetDate = new Date(), profile = 'ram') {
+    const list = getProfileCoreResponsibilities(profile);
+    return list.filter((item) => this.isDue(item, targetDate));
   }
 
   /**
-   * Alias for getDueResponsibilities with an explicit Date object.
-   * Used by store when recording stats for a past date.
+   * Alias for getDueResponsibilities with an explicit Date object and profile.
    * @param {Date} date
+   * @param {string} profile
    * @returns {Array}
    */
-  static getDueResponsibilitiesForDate(date) {
-    return this.getDueResponsibilities(date);
+  static getDueResponsibilitiesForDate(date, profile = 'ram') {
+    return this.getDueResponsibilities(date, profile);
   }
 }

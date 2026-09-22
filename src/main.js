@@ -34,7 +34,12 @@ function renderApp() {
     if (action === 'OPEN_CALIBRATE') {
       openModal(renderCalibrationModal(state.baseline, (data) => store.updateBaseline(data), closeModal));
     } else if (action === 'OPEN_SYNC') {
-      openModal(renderSyncModal((key) => store.startCloudSync(key), closeModal));
+      openModal(renderSyncModal(
+        state,
+        (myKey, sibKey) => store.setSyncKeys(myKey, sibKey),
+        (newProfile) => store.setUserProfile(newProfile),
+        closeModal
+      ));
     } else if (action === 'OPEN_EVAL') {
       const evalReport = store.evaluateDayStatus();
       openModal(renderAccountabilityModal(evalReport, closeModal));
@@ -66,7 +71,11 @@ function renderApp() {
       (id)     => store.postponeCustomTask(id),
       (id)     => store.postponeCoreTask(id),
       (id)     => store.unskipCustomTask(id),
-      (id)     => store.unskipCoreTask(id)
+      (id)     => store.unskipCoreTask(id),
+      (taskId, type, data) => store.exemptTask(taskId, type, data),
+      (taskId) => store.unexemptTask(taskId),
+      (tradeData) => store.sendTradeOffer(tradeData),
+      (tradeId, action, counterData) => store.respondToTrade(tradeId, action, counterData)
     );
 
     // Daily Challenge
@@ -119,6 +128,29 @@ renderApp();
 
 // Dev test helpers accessible from browser console
 window.store = store;
+window.switchProfile = (profile) => {
+  store.setUserProfile(profile);
+  console.log(`Switched active profile to: ${profile}`);
+};
+window.simulateTradeRequest = (taskName = 'Dishes & Kitchen', note = 'Cut on finger, will cook dinner tomorrow') => {
+  store.state.trades = [
+    {
+      id: 'trade_sim_' + Date.now(),
+      fromUser: store.state.siblingSyncKey,
+      fromName: store.state.profile === 'sister' ? 'Ram' : 'Sister',
+      toUser: store.state.syncKey,
+      taskId: 'sim_task',
+      taskName: taskName,
+      taskType: 'core',
+      note: note,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    },
+    ...(store.state.trades || [])
+  ];
+  store.notify();
+  console.log('📬 Simulated incoming trade request card on Today tab!');
+};
 window.testRedVersion = () => {
   const sampleCoreId = 'core_deep_work';
   store.state.postponedCoreTasks = {

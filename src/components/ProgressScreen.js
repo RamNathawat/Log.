@@ -26,12 +26,15 @@ export function renderProgressScreen(state) {
   const anchorDate = state.date ? new Date(state.date + 'T12:00:00') : new Date();
 
   // ─── Live completion stats for today ─────────────────────────────────────
-  const dueToday = RecurrenceEngine.getDueResponsibilities(anchorDate);
+  const profile = state.profile || 'ram';
+  const dueToday = RecurrenceEngine.getDueResponsibilities(anchorDate, profile);
   const customTasks = state.customTasks || [];
   const postponedCore = state.postponedCoreTasks || {};
+  const exemptions = state.taskExemptions || {};
+  const delegated = state.delegatedTasks || {};
 
-  const activeDueToday = dueToday.filter(item => !postponedCore[item.id]);
-  const activeCustomToday = customTasks.filter(t => !t.postponed);
+  const activeDueToday = dueToday.filter(item => !postponedCore[item.id] && !exemptions[item.id] && !delegated[item.id]);
+  const activeCustomToday = customTasks.filter(t => !t.postponed && !exemptions[t.id] && !delegated[t.id]);
   const totalDueToday = activeDueToday.length + activeCustomToday.length;
   const completedToday =
     dueToday.filter(item => state.dailyResponsibilities[item.id]?.completed).length
@@ -272,6 +275,11 @@ export function renderProgressScreen(state) {
             </div>
             <div class="acct-item-miss-stat">${o.missed} of ${o.due} missed in 14 days</div>
             <div class="acct-item-msg">${message}</div>
+            
+            ${consecutiveHits >= recoveryTarget
+              ? `<div style="font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 5px; font-weight: 500;">✓ Flag cleared — keep it up.</div>`
+              : `<div style="font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 5px;">${recoveryTarget - consecutiveHits} more day${recoveryTarget - consecutiveHits !== 1 ? 's' : ''} in a row to clear this flag.</div>`
+            }
             
             <button class="acct-impact-toggle" type="button" data-id="${o.id}">
               <span class="acct-impact-toggle-text">Impacted stats</span>

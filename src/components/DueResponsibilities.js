@@ -1,5 +1,8 @@
 import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
 import { haptics } from '../services/hapticsService.js';
+import { renderExemptionModal } from './ExemptionModal.js';
+import { renderTradeModal } from './TradeModal.js';
+import { renderTradeRequestCards } from './TradeRequestCard.js';
 
 export function renderDueResponsibilities(
   state,
@@ -10,14 +13,22 @@ export function renderDueResponsibilities(
   onPostponeTask,
   onPostponeCoreTask,
   onUnskipTask,
-  onUnskipCoreTask
+  onUnskipCoreTask,
+  onExemptTask,
+  onUnexemptTask,
+  onSendTrade,
+  onRespondTrade
 ) {
-  const dueList = RecurrenceEngine.getDueResponsibilities();
+  const profile = state.profile || 'ram';
+  const dueList = RecurrenceEngine.getDueResponsibilities(undefined, profile);
   const customTasks = state.customTasks || [];
   const postponedCore = state.postponedCoreTasks || {};
+  const exemptions = state.taskExemptions || {};
+  const delegated = state.delegatedTasks || {};
 
-  const activeCore = dueList.filter(item => !postponedCore[item.id]);
-  const activeCustom = customTasks.filter(t => !t.postponed);
+  // Active actionable tasks due today (excluding postponed, exempt, or delegated tasks)
+  const activeCore = dueList.filter(item => !postponedCore[item.id] && !exemptions[item.id] && !delegated[item.id]);
+  const activeCustom = customTasks.filter(t => !t.postponed && !exemptions[t.id] && !delegated[t.id]);
 
   const completedCore = dueList.filter((item) => state.dailyResponsibilities[item.id]?.completed).length;
   const completedCustom = customTasks.filter(t => t.completed).length;
@@ -40,8 +51,17 @@ export function renderDueResponsibilities(
     </svg>
   `;
 
-  // ── Helper: unified postpone pill for both task types ───────────────────
-  function getPostponePill({ isCore, postponedDays, isPostponed }) {
+  // ── Helper: unified status pill for both task types ─────────────────────
+  function getTaskStatusPill(taskId, isCore, postponedDays, isPostponed) {
+    if (exemptions[taskId]) {
+      const reason = exemptions[taskId].reason || 'Exempt';
+      return `<span class="postpone-pill">exempt: ${reason}</span>`;
+    }
+
+    if (delegated[taskId]) {
+      return `<span class="postpone-pill">traded to sibling</span>`;
+    }
+
     if (!isPostponed) return '';
 
     if (isCore) {
@@ -66,9 +86,11 @@ export function renderDueResponsibilities(
     const xp = task.xp || 15;
     const catLabel = task.category || 'Daily';
     const isPostponed = Boolean(postponedCore[task.id]);
+    const isExempt = Boolean(exemptions[task.id]);
+    const isDelegated = Boolean(delegated[task.id]);
     const days = postponedCore[task.id]?.postponedDays || 0;
-    const uClass = !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
-    const pill = getPostponePill({ isCore: true, postponedDays: days, isPostponed });
+    const uClass = isExempt ? 'is-exempt' : isDelegated ? 'is-delegated' : !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
+    const pill = getTaskStatusPill(task.id, true, days, isPostponed);
 
     return `
       <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
@@ -99,8 +121,10 @@ export function renderDueResponsibilities(
     const catTag = task.tag || task.category || 'Custom';
     const days = task.postponedDays || 0;
     const isPostponed = Boolean(task.postponed);
-    const uClass = !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
-    const pill = getPostponePill({ isCore: false, postponedDays: days, isPostponed });
+    const isExempt = Boolean(exemptions[task.id]);
+    const isDelegated = Boolean(delegated[task.id]);
+    const uClass = isExempt ? 'is-exempt' : isDelegated ? 'is-delegated' : !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
+    const pill = getTaskStatusPill(task.id, false, days, isPostponed);
 
     return `
       <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
@@ -139,6 +163,9 @@ export function renderDueResponsibilities(
   element.className = 'system-section section-gap-top';
 
   element.innerHTML = `
+    <!-- Pending Sibling Trade Cards -->
+    <div id="trade-requests-mount"></div>
+
     <div class="today-section-header">
       <div class="today-header-left">
         <span class="today-title">Today</span>
@@ -186,24 +213,45 @@ export function renderDueResponsibilities(
     </div>
   `;
 
-  // ── Bottom action sheet for postpone ──────────────────────────────────────
+  // Render incoming trade cards
+  const tradeMount = element.querySelector('#trade-requests-mount');
+  const availableTasksForSwap = [...dueList, ...customTasks].filter(t => !state.dailyResponsibilities[t.id]?.completed && !t.completed);
+  const tradeCardsEl = renderTradeRequestCards(
+    state.trades || [],
+    state.syncKey,
+    availableTasksForSwap,
+    onRespondTrade,
+    null
+  );
+  if (tradeCardsEl) {
+    tradeMount.appendChild(tradeCardsEl);
+  }
+
+  // ── Bottom action sheet for task options ──────────────────────────────────
   function showPostponeSheet(taskId, type) {
     const isCore = type === 'core';
-    const task = isCore ? null : customTasks.find(t => t.id === taskId);
+    const coreTask = isCore ? dueList.find(t => t.id === taskId) : null;
+    const customTask = isCore ? null : customTasks.find(t => t.id === taskId);
+    const taskObj = coreTask || customTask || { id: taskId, name: taskId };
+
     const isDone = isCore
       ? Boolean(state.dailyResponsibilities[taskId]?.completed)
-      : Boolean(task?.completed);
+      : Boolean(customTask?.completed);
 
     // Only show for unchecked tasks
     if (isDone) return;
 
     const isAlreadyPostponed = isCore
       ? Boolean(postponedCore[taskId])
-      : Boolean(task?.postponed);
+      : Boolean(customTask?.postponed);
 
-    const taskName = isCore
-      ? dueList.find(t => t.id === taskId)?.name || taskId
-      : task?.name || taskId;
+    const isExempt = Boolean(exemptions[taskId]);
+    const taskName = taskObj.name || taskId;
+
+    // Personal growth habits (Reading & Exercise) cannot be traded
+    const isTradeable = isCore
+      ? (coreTask?.isTradeable !== false && taskId !== 'reading' && taskId !== 'workout')
+      : true;
 
     // Remove any existing active action sheets first
     document.querySelectorAll('.action-sheet-backdrop').forEach(b => b.remove());
@@ -227,7 +275,7 @@ export function renderDueResponsibilities(
               </svg>
             </div>
             <div class="action-sheet-item-text">
-              <span class="action-sheet-item-label">Skip today</span>
+              <span class="action-sheet-item-label">Skip for today</span>
               <span class="action-sheet-item-sub">Carries to tomorrow (-1 WIL, -1 LIFE)</span>
             </div>
           </button>
@@ -244,17 +292,65 @@ export function renderDueResponsibilities(
             </div>
           </button>
         `}
+
+        <div class="action-sheet-divider"></div>
+
+        <!-- Justified Exemption (0 Penalty) -->
+        ${!isExempt ? `
+          <button class="action-sheet-item" id="as-exempt">
+            <div class="action-sheet-item-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <path d="m9 12 2 2 4-4"></path>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label">Exempt / Valid Reason</span>
+              <span class="action-sheet-item-sub">Mom cooked, injury, supply issue (0 penalty)</span>
+            </div>
+          </button>
+        ` : `
+          <button class="action-sheet-item" id="as-unexempt">
+            <div class="action-sheet-item-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label">Remove Exemption</span>
+              <span class="action-sheet-item-sub">Return task to active due list</span>
+            </div>
+          </button>
+        `}
+
+        <!-- Trade / Swap with Sibling -->
+        ${isTradeable ? `
+          <div class="action-sheet-divider"></div>
+          <button class="action-sheet-item" id="as-trade">
+            <div class="action-sheet-item-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 16V4M7 4L3 8M7 4L11 8M17 8v12M17 20l4-4M17 20l-4-4"/>
+              </svg>
+            </div>
+            <div class="action-sheet-item-text">
+              <span class="action-sheet-item-label">Trade / Swap Task</span>
+              <span class="action-sheet-item-sub">Offer note or swap task with sibling</span>
+            </div>
+          </button>
+        ` : ''}
+
         ${!isCore ? `
           <div class="action-sheet-divider"></div>
-          <button class="action-sheet-item" id="as-delete">
-            <div class="action-sheet-item-icon" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">
+          <button class="action-sheet-item action-sheet-item--destructive" id="as-delete">
+            <div class="action-sheet-item-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
             </div>
             <div class="action-sheet-item-text">
-              <span class="action-sheet-item-label" style="color: #ef4444;">Delete task</span>
+              <span class="action-sheet-item-label">Delete task</span>
               <span class="action-sheet-item-sub">Permanently remove this custom task</span>
             </div>
           </button>
@@ -298,6 +394,23 @@ export function renderDueResponsibilities(
       haptics.impactLight?.();
       if (isCore) onUnskipCoreTask(taskId);
       else onUnskipTask(taskId);
+    });
+
+    sheet.querySelector('#as-exempt')?.addEventListener('click', () => {
+      close();
+      renderExemptionModal(taskObj, type, onExemptTask, null);
+    });
+
+    sheet.querySelector('#as-unexempt')?.addEventListener('click', () => {
+      close();
+      haptics.impactLight?.();
+      onUnexemptTask(taskId);
+    });
+
+    sheet.querySelector('#as-trade')?.addEventListener('click', () => {
+      close();
+      const availableSwap = [...dueList, ...customTasks].filter(t => t.id !== taskId && !state.dailyResponsibilities[t.id]?.completed && !t.completed);
+      renderTradeModal(taskObj, type, availableSwap, onSendTrade, null, false);
     });
 
     sheet.querySelector('#as-delete')?.addEventListener('click', () => {

@@ -23,10 +23,14 @@ class Store {
   }
 
   loadState() {
-    const saved = StorageService.load();
+    // Determine which profile is active (lightweight pointer key)
+    const activeProfile = StorageService.getActiveProfile();
+    const saved = StorageService.load(activeProfile);
     if (saved) return saved;
-    const initial = getInitialState();
-    StorageService.save(initial);
+    // No saved state for this profile — create fresh
+    const initial = getInitialState(activeProfile);
+    StorageService.save(initial, activeProfile);
+    StorageService.setActiveProfile(activeProfile);
     return initial;
   }
 
@@ -36,6 +40,30 @@ class Store {
   migrateState() {
     let dirty = false;
 
+    if (!this.state.profile) {
+      this.state.profile = 'ram';
+      dirty = true;
+    }
+    if (!this.state.syncKey) {
+      this.state.syncKey = this.state.profile === 'sister' ? 'OS1837' : 'OS2290';
+      dirty = true;
+    }
+    if (!this.state.siblingSyncKey) {
+      this.state.siblingSyncKey = this.state.profile === 'sister' ? 'OS2290' : 'OS1837';
+      dirty = true;
+    }
+    if (!this.state.taskExemptions) {
+      this.state.taskExemptions = {};
+      dirty = true;
+    }
+    if (!this.state.trades) {
+      this.state.trades = [];
+      dirty = true;
+    }
+    if (!this.state.delegatedTasks) {
+      this.state.delegatedTasks = {};
+      dirty = true;
+    }
     if (!this.state.customTasks) {
       this.state.customTasks = [];
       dirty = true;
@@ -68,7 +96,10 @@ class Store {
       dirty = true;
     }
 
-    if (dirty) StorageService.save(this.state);
+    if (dirty) {
+      StorageService.save(this.state, this.state.profile);
+      StorageService.setActiveProfile(this.state.profile);
+    }
   }
 
   getState() {
@@ -81,22 +112,81 @@ class Store {
   }
 
   notify() {
-    StorageService.save(this.state);
+    StorageService.save(this.state, this.state.profile);
+    StorageService.setActiveProfile(this.state.profile);
     dbSync.pushState(this.state);
     for (const listener of this.listeners) {
       listener(this.state);
     }
   }
 
-  startCloudSync(syncKey) {
-    dbSync.startSync(syncKey, (remoteState) => {
-      this.state = { ...this.state, ...remoteState };
-      StorageService.save(this.state);
-      // Notify listeners without pushing back to avoid loop
-      for (const listener of this.listeners) {
-        listener(this.state);
+  setUserProfile(profile) {
+    const targetProfile = profile === 'sister' ? 'sister' : 'ram';
+
+    // 1. Save the CURRENT profile's state before switching
+    StorageService.save(this.state, this.state.profile);
+
+    // 2. Load the target profile's existing state, or create fresh
+    const existingState = StorageService.load(targetProfile);
+    if (existingState) {
+      this.state = existingState;
+    } else {
+      this.state = getInitialState(targetProfile);
+    }
+
+    // 3. Ensure profile meta is correct
+    this.state.profile = targetProfile;
+    this.state.syncKey = targetProfile === 'sister' ? 'OS1837' : 'OS2290';
+    this.state.siblingSyncKey = targetProfile === 'sister' ? 'OS2290' : 'OS1837';
+
+    // 4. Persist and notify
+    StorageService.setActiveProfile(targetProfile);
+    this.migrateState();
+    this.ensureDateSync();
+    this.addLog('PROFILE_ACTIVE', `Account loaded: ${this.state.character?.name || targetProfile} (${this.state.syncKey})`);
+    this.notify();
+    this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
+  }
+
+  setSyncKeys(myKey, siblingKey) {
+    if (myKey) this.state.syncKey = myKey.toUpperCase();
+    if (siblingKey) this.state.siblingSyncKey = siblingKey.toUpperCase();
+    this.notify();
+    this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
+  }
+
+  startCloudSync(syncKey, siblingKey = this.state.siblingSyncKey) {
+    const myKey = syncKey || this.state.syncKey;
+    const sibKey = siblingKey || this.state.siblingSyncKey;
+
+    dbSync.startSync(
+      myKey,
+      sibKey,
+      (remoteState) => {
+        // Only merge remote state if it belongs to the current active profile
+        // (prevents sibling's Firestore doc from contaminating this device)
+        if (remoteState.profile && remoteState.profile !== this.state.profile) {
+          console.info('[Store] Ignored remote state for different profile:', remoteState.profile);
+          return;
+        }
+        this.state = { ...this.state, ...remoteState };
+        StorageService.save(this.state, this.state.profile);
+        StorageService.setActiveProfile(this.state.profile);
+        for (const listener of this.listeners) {
+          listener(this.state);
+        }
+      },
+      (tradeChannelData) => {
+        // Trade channel is the ONLY cross-profile shared data
+        if (!tradeChannelData) return;
+        const channelTrades = tradeChannelData.trades || [];
+        this.state.trades = channelTrades;
+        StorageService.save(this.state, this.state.profile);
+        for (const listener of this.listeners) {
+          listener(this.state);
+        }
       }
-    });
+    );
   }
 
   getCurrentPeriod() {
@@ -163,7 +253,8 @@ class Store {
     }
 
     const targetDate = new Date(dateStr + 'T12:00:00');
-    const dueList = RecurrenceEngine.getDueResponsibilities(targetDate);
+    const profile = this.state.profile || 'ram';
+    const dueList = RecurrenceEngine.getDueResponsibilities(targetDate, profile);
     const customTasks = this.state.customTasks || [];
     const totalDue = dueList.length + customTasks.length;
 
@@ -355,7 +446,61 @@ class Store {
     }
 
     this.evaluateRecreationUnlock();
+    this.computeAndApplyRecovery();
     this.notify();
+  }
+
+  /**
+   * Scans the last 14 days of daily logs to compute consecutive recovery
+   * completions for habitually missed tasks, then applies a cumulative
+   * RECOVERY attribute delta. This makes the RECOVERY ring in Attributes
+   * panel live and reactive as the user rebuilds their habits.
+   */
+  computeAndApplyRecovery() {
+    const LOOKBACK = 14;
+    const dailyLogs = this.state.stats?.dailyLogs || {};
+    const anchorDate = this.state.date ? new Date(this.state.date + 'T12:00:00') : new Date();
+
+    // Compute miss counts for each task over the lookback window
+    const missCount = {};
+    for (let i = 1; i <= LOOKBACK; i++) {
+      const d = new Date(anchorDate);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const log = dailyLogs[key];
+      if (!log) continue;
+      (log.missedCoreIds || []).forEach(id => {
+        missCount[id] = (missCount[id] || 0) + 1;
+      });
+    }
+
+    // For each flagged task (missed ≥ 2), count consecutive clean hits backward from yesterday
+    let totalRecoveryScore = 0;
+    Object.entries(missCount).forEach(([id, missed]) => {
+      if (missed < 2) return;
+      let hits = 0;
+      for (let i = 1; i <= LOOKBACK; i++) {
+        const d = new Date(anchorDate);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const log = dailyLogs[key];
+        if (!log) continue;
+        if ((log.missedCoreIds || []).includes(id)) break; // streak broken
+        hits++;
+      }
+      // +0.5 RECOVERY per consecutive clean day for each flagged habit
+      totalRecoveryScore += hits * 0.5;
+    });
+
+    // Apply the score as a recovery attribute top-up (capped at 60 max by ringGauge)
+    const currentRecovery = this.state.character?.attributes?.RECOVERY ?? 10;
+    const targetRecovery = Math.min(60, Math.max(currentRecovery, totalRecoveryScore));
+    if (Math.abs(targetRecovery - currentRecovery) > 0.01) {
+      this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+        this.state.character.attributes,
+        { RECOVERY: targetRecovery - currentRecovery }
+      );
+    }
   }
 
   // --- CUSTOM TASKS ---
@@ -509,6 +654,184 @@ class Store {
     this.notify();
   }
 
+  // --- JUSTIFIED TASK EXEMPTIONS (0 Penalty) ---
+  exemptTask(taskId, type, { reason, category }) {
+    if (!reason || !reason.trim()) return;
+    const cleanReason = reason.trim();
+    const cat = category || 'General';
+
+    this.state.taskExemptions = {
+      ...(this.state.taskExemptions || {}),
+      [taskId]: {
+        reason: cleanReason,
+        category: cat,
+        exemptedAt: new Date().toISOString(),
+        status: 'EXEMPT'
+      }
+    };
+
+    // If task was previously postponed with penalty, restore deducted points
+    if (type === 'core' && this.state.postponedCoreTasks?.[taskId]) {
+      const updated = { ...(this.state.postponedCoreTasks || {}) };
+      delete updated[taskId];
+      this.state.postponedCoreTasks = updated;
+      this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+        this.state.character.attributes,
+        { WIL: -CONFIG.WIL_POSTPONE_PENALTY, LIFE: -CONFIG.LIFE_POSTPONE_PENALTY }
+      );
+    } else if (type === 'custom') {
+      const task = (this.state.customTasks || []).find(t => t.id === taskId);
+      if (task?.postponed) {
+        this.state.customTasks = this.state.customTasks.map(t =>
+          t.id === taskId ? { ...t, postponed: false, postponedDays: 0 } : t
+        );
+        this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
+          this.state.character.attributes,
+          { WIL: -CONFIG.WIL_POSTPONE_PENALTY, LIFE: -CONFIG.LIFE_POSTPONE_PENALTY }
+        );
+      }
+    }
+
+    this.addLog('TASK_EXEMPTED', `Justified exemption: ${taskId} (${cleanReason} · 0 penalty)`);
+    this.evaluateRecreationUnlock();
+    this.notify();
+    this._syncTradeChannel();
+  }
+
+  unexemptTask(taskId) {
+    if (this.state.taskExemptions?.[taskId]) {
+      const updated = { ...this.state.taskExemptions };
+      delete updated[taskId];
+      this.state.taskExemptions = updated;
+      this.addLog('TASK_EXEMPTION_REMOVED', `Exemption removed for: ${taskId}`);
+      this.evaluateRecreationUnlock();
+      this.notify();
+      this._syncTradeChannel();
+    }
+  }
+
+  // --- REAL-TIME TASK BARTER & SIBLING TRADE ---
+  _syncTradeChannel() {
+    if (!this.state.syncKey || !this.state.siblingSyncKey) return;
+    dbSync.pushTradeData(this.state.syncKey, this.state.siblingSyncKey, {
+      trades: this.state.trades || [],
+      exemptions: this.state.taskExemptions || {},
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  sendTradeOffer({ taskId, taskName, type, note, swapTaskId, swapTaskName }) {
+    const tradeId = `trade_${Date.now()}`;
+    const newTrade = {
+      id: tradeId,
+      fromUser: this.state.syncKey,
+      fromName: this.state.character.name,
+      toUser: this.state.siblingSyncKey,
+      taskId,
+      taskName,
+      taskType: type,
+      note: (note || '').trim(),
+      swapTaskId: swapTaskId || null,
+      swapTaskName: swapTaskName || null,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+
+    this.state.trades = [newTrade, ...(this.state.trades || [])];
+    this.addLog('TRADE_PROPOSED', `Proposed trade for "${taskName}" to sibling.`);
+    this.notify();
+    this._syncTradeChannel();
+    return newTrade;
+  }
+
+  respondToTrade(tradeId, action, counterData = null) {
+    const trade = (this.state.trades || []).find(t => t.id === tradeId);
+    if (!trade) return;
+
+    if (action === 'ACCEPT') {
+      trade.status = 'ACCEPTED';
+      trade.resolvedAt = new Date().toISOString();
+
+      if (trade.toUser === this.state.syncKey) {
+        // Recipient accepts the task from sibling
+        const adopted = {
+          id: `traded_${trade.taskId}_${Date.now()}`,
+          name: trade.taskName,
+          xp: 15,
+          attributes: { LIFE: 0.8, WIL: 0.3 },
+          category: 'Barter',
+          tag: `Traded from ${trade.fromName || 'Sibling'}`,
+          color: '#8B5CF6',
+          bg: '#EDE9FE',
+          completed: false,
+          completedAt: null,
+          addedAt: new Date().toISOString(),
+          postponed: false,
+          postponedDays: 0,
+          isTraded: true,
+          tradeId: trade.id
+        };
+        this.state.customTasks = [...(this.state.customTasks || []), adopted];
+
+        if (trade.swapTaskId) {
+          this.state.delegatedTasks = {
+            ...(this.state.delegatedTasks || {}),
+            [trade.swapTaskId]: { tradeId: trade.id, tradedTo: trade.fromUser }
+          };
+        }
+      } else if (trade.fromUser === this.state.syncKey) {
+        // Sender marked task as delegated
+        this.state.delegatedTasks = {
+          ...(this.state.delegatedTasks || {}),
+          [trade.taskId]: { tradeId: trade.id, tradedTo: trade.toUser }
+        };
+
+        if (trade.swapTaskId && trade.swapTaskName) {
+          const adopted = {
+            id: `traded_${trade.swapTaskId}_${Date.now()}`,
+            name: trade.swapTaskName,
+            xp: 15,
+            attributes: { LIFE: 0.8, WIL: 0.3 },
+            category: 'Barter',
+            tag: `Traded from Sibling`,
+            color: '#8B5CF6',
+            bg: '#EDE9FE',
+            completed: false,
+            completedAt: null,
+            addedAt: new Date().toISOString(),
+            postponed: false,
+            postponedDays: 0,
+            isTraded: true,
+            tradeId: trade.id
+          };
+          this.state.customTasks = [...(this.state.customTasks || []), adopted];
+        }
+      }
+
+      this.addLog('TRADE_ACCEPTED', `Trade accepted: "${trade.taskName}".`);
+      audio.playUnlock?.();
+    } else if (action === 'DECLINE') {
+      trade.status = 'DECLINED';
+      trade.resolvedAt = new Date().toISOString();
+      this.addLog('TRADE_DECLINED', `Trade declined for "${trade.taskName}".`);
+    } else if (action === 'COUNTER') {
+      trade.status = 'COUNTER_OFFER';
+      trade.counterOffer = {
+        fromUser: this.state.syncKey,
+        fromName: this.state.character.name,
+        note: (counterData?.note || '').trim(),
+        swapTaskId: counterData?.swapTaskId || null,
+        swapTaskName: counterData?.swapTaskName || null,
+        at: new Date().toISOString()
+      };
+      this.addLog('TRADE_COUNTER_OFFER', `Counter-offer sent for "${trade.taskName}".`);
+    }
+
+    this.evaluateRecreationUnlock();
+    this.notify();
+    this._syncTradeChannel();
+  }
+
   // --- SIDE QUEST DIRECTIVE ---
   getTodayQuest() {
     return ChallengeEngine.generatePeriodQuest(this.getCurrentPeriod(), this.state.baseline);
@@ -616,9 +939,13 @@ class Store {
       return;
     }
 
-    const dueList = RecurrenceEngine.getDueResponsibilities();
+    const profile = this.state.profile || 'ram';
+    const dueList = RecurrenceEngine.getDueResponsibilities(undefined, profile);
     const postponedCore = this.state.postponedCoreTasks || {};
-    const activeDueList = dueList.filter(item => !postponedCore[item.id]);
+    const exemptions = this.state.taskExemptions || {};
+    const delegated = this.state.delegatedTasks || {};
+
+    const activeDueList = dueList.filter(item => !postponedCore[item.id] && !exemptions[item.id] && !delegated[item.id]);
 
     if (activeDueList.length === 0) return;
 
@@ -657,7 +984,8 @@ class Store {
 
   // --- DAY ACCOUNTABILITY / EVALUATION ---
   evaluateDayStatus() {
-    const dueList = RecurrenceEngine.getDueResponsibilities();
+    const profile = this.state.profile || 'ram';
+    const dueList = RecurrenceEngine.getDueResponsibilities(undefined, profile);
     const completedCount = dueList.filter((i) => this.state.dailyResponsibilities[i.id]?.completed).length;
     const isFlawless = completedCount === dueList.length;
     const questStatus = this.state.sideQuestState.status;

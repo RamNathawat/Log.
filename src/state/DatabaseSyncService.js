@@ -8,9 +8,12 @@ class DatabaseSyncService {
     this.app = null;
     this.db = null;
     this.syncKey = null;
+    this.siblingKey = null;
     this.unsubscribe = null;
+    this.tradeUnsubscribe = null;
     this.isSyncing = false;
     this.onRemoteUpdate = null;
+    this.onTradesUpdate = null;
     this.initFirebase();
   }
 
@@ -25,27 +28,32 @@ class DatabaseSyncService {
     }
   }
 
-  async startSync(syncKey, onRemoteUpdate) {
+  getPairKey(key1, key2) {
+    if (!key1 || !key2) return null;
+    return [key1.toUpperCase(), key2.toUpperCase()].sort().join('_');
+  }
+
+  async startSync(syncKey, siblingKey, onRemoteUpdate, onTradesUpdate) {
     if (!this.db) {
       console.warn("Cannot start sync: Firebase is not initialized.");
       return;
     }
     
     this.syncKey = syncKey;
+    this.siblingKey = siblingKey;
     this.onRemoteUpdate = onRemoteUpdate;
+    this.onTradesUpdate = onTradesUpdate;
     this.isSyncing = true;
     
-    // Subscribe to remote changes
+    // 1. Subscribe to personal remote state
     const docRef = doc(this.db, 'users', this.syncKey);
     
-    // First, try to merge what we have with what is on the server
     try {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const remoteState = snap.data();
         this.onRemoteUpdate(remoteState);
       } else {
-        // If server is empty, push our local state to it
         const localState = StorageService.load();
         if (localState) {
           await this.pushState(localState);
@@ -55,16 +63,37 @@ class DatabaseSyncService {
       console.error("Error during initial sync:", err);
     }
 
-    // Then subscribe for ongoing real-time updates
     this.unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists() && this.isSyncing) {
         const remoteState = docSnap.data();
-        // Pause pushing while we apply remote update to prevent loop
         this.isSyncing = false; 
         this.onRemoteUpdate(remoteState);
         this.isSyncing = true;
       }
     });
+
+    // 2. Subscribe to real-time Sibling Trade & Accountability Channel
+    if (siblingKey) {
+      const pairKey = this.getPairKey(syncKey, siblingKey);
+      if (pairKey) {
+        const tradeDocRef = doc(this.db, 'trade_channels', pairKey);
+        
+        try {
+          const tradeSnap = await getDoc(tradeDocRef);
+          if (tradeSnap.exists() && this.onTradesUpdate) {
+            this.onTradesUpdate(tradeSnap.data());
+          }
+        } catch (err) {
+          console.error("Error fetching trade channel:", err);
+        }
+
+        this.tradeUnsubscribe = onSnapshot(tradeDocRef, (docSnap) => {
+          if (docSnap.exists() && this.onTradesUpdate) {
+            this.onTradesUpdate(docSnap.data());
+          }
+        });
+      }
+    }
   }
 
   stopSync() {
@@ -72,8 +101,26 @@ class DatabaseSyncService {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    if (this.tradeUnsubscribe) {
+      this.tradeUnsubscribe();
+      this.tradeUnsubscribe = null;
+    }
     this.syncKey = null;
+    this.siblingKey = null;
     this.isSyncing = false;
+  }
+
+  async pushTradeData(myKey, siblingKey, tradeChannelData) {
+    if (!this.db) return;
+    const pairKey = this.getPairKey(myKey, siblingKey);
+    if (!pairKey) return;
+
+    try {
+      const tradeDocRef = doc(this.db, 'trade_channels', pairKey);
+      await setDoc(tradeDocRef, tradeChannelData, { merge: true });
+    } catch (err) {
+      console.error("Error pushing trade channel data:", err);
+    }
   }
 
   async pushState(state) {

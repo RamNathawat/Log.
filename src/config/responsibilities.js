@@ -1,8 +1,7 @@
 /**
- * Master List of Core Daily Habits / Rituals
- * Defines frequency, recurrence rules, and attribute XP weights.
+ * Master List of Core Daily Habits / Rituals for Ram
  */
-export const CORE_RESPONSIBILITIES_CONFIG = [
+export const RAM_CORE_RESPONSIBILITIES = [
   {
     id: 'dishes',
     name: 'Dishes & Kitchen',
@@ -10,29 +9,44 @@ export const CORE_RESPONSIBILITIES_CONFIG = [
     description: 'Clean sink, wash dishes, wipe countertops.',
     xp: 15,
     category: 'Home & Living',
-    attributes: { LIFE: 0.8, WIL: 0.2 }
+    attributes: { LIFE: 0.8, WIL: 0.2 },
+    isTradeable: true
   },
   {
-    id: 'laundry_hang',
-    name: 'Laundry Cycle & Hang Clothes',
+    id: 'jhaadu_mop_hang',
+    name: 'Jhaadu, Pocha & Hang Clothes',
     frequency: 'alternate-day',
     anchorDate: '2026-01-01',
     intervalDays: 2,
-    description: 'Washing machine cycle, hang and store clean clothes.',
+    description: 'Sweep, mop floors and hang the washed clothes.',
     xp: 18,
     category: 'Home & Living',
-    attributes: { LIFE: 1.0, WIL: 0.3 }
+    attributes: { LIFE: 1.0, WIL: 0.3 },
+    isTradeable: true
   },
   {
-    id: 'jhaadu_mop',
-    name: 'Jhaadu & Mopping',
+    id: 'washing_machine_prep',
+    name: 'Washing Machine Prep',
     frequency: 'alternate-day',
     anchorDate: '2026-01-02',
     intervalDays: 2,
-    description: 'Sweep floors thoroughly and wet mop living spaces.',
-    xp: 18,
+    description: 'Load and run washing machine cycle (night before).',
+    xp: 12,
     category: 'Home & Living',
-    attributes: { LIFE: 1.0, WIL: 0.3 }
+    attributes: { LIFE: 0.8, WIL: 0.2 },
+    isTradeable: true
+  },
+  {
+    id: 'cat_litter',
+    name: "Puppy Potty & Cat's Litter",
+    frequency: 'alternate-day',
+    anchorDate: '2026-01-01',
+    intervalDays: 2,
+    description: 'Clean and sanitize pet litter and potty area.',
+    xp: 14,
+    category: 'Home & Living',
+    attributes: { LIFE: 0.8, WIL: 0.3 },
+    isTradeable: true
   },
   {
     id: 'reading',
@@ -41,7 +55,8 @@ export const CORE_RESPONSIBILITIES_CONFIG = [
     description: 'Deep reading session (books, research, essays).',
     xp: 15,
     category: 'Learning & Mind',
-    attributes: { INT: 1.2, WIL: 0.3 }
+    attributes: { INT: 1.2, WIL: 0.3 },
+    isTradeable: false // Personal growth habit - cannot be traded
   },
   {
     id: 'workout',
@@ -50,7 +65,8 @@ export const CORE_RESPONSIBILITIES_CONFIG = [
     description: 'Physical workout or calisthenics session.',
     xp: 18,
     category: 'Fitness & Body',
-    attributes: { STR: 1.2, WIL: 0.4 }
+    attributes: { STR: 1.2, WIL: 0.4 },
+    isTradeable: false // Personal growth habit - cannot be traded
   },
   {
     id: 'outreach',
@@ -59,9 +75,108 @@ export const CORE_RESPONSIBILITIES_CONFIG = [
     description: 'High-leverage outreach, applications, or client relations.',
     xp: 16,
     category: 'Deep Work',
-    attributes: { WORK: 1.2, WIL: 0.4 }
+    attributes: { WORK: 1.2, WIL: 0.4 },
+    isTradeable: true
   }
 ];
+
+/**
+ * Master List of Core Daily Habits / Rituals for Sister
+ */
+export const SISTER_CORE_RESPONSIBILITIES = [
+  {
+    id: 'get_milk',
+    name: 'Get Fresh Milk',
+    frequency: 'daily',
+    description: 'Pick up daily milk supplies from the store.',
+    xp: 12,
+    category: 'Errands & Living',
+    attributes: { LIFE: 0.8, WIL: 0.2 },
+    isTradeable: true
+  },
+  {
+    id: 'cook_food',
+    name: 'Cook Meals',
+    frequency: 'daily',
+    description: 'Prepare wholesome fresh food and meals for the day.',
+    xp: 18,
+    category: 'Home & Living',
+    attributes: { LIFE: 1.0, WIL: 0.3 },
+    isTradeable: true
+  },
+  {
+    id: 'water_plants',
+    name: 'Water the Plants',
+    frequency: 'daily',
+    description: 'Tend to the garden and water all household plants.',
+    xp: 10,
+    category: 'Home & Living',
+    attributes: { LIFE: 0.6, WIL: 0.2 },
+    isTradeable: true
+  },
+  {
+    id: 'jhaadu_mop_hang',
+    name: 'Jhaadu, Pocha & Hang Clothes',
+    frequency: 'alternate-day',
+    anchorDate: '2026-01-02',
+    intervalDays: 2,
+    description: 'Sweep, mop floors and hang the washed clothes.',
+    xp: 18,
+    category: 'Home & Living',
+    attributes: { LIFE: 1.0, WIL: 0.3 },
+    isTradeable: true
+  },
+  {
+    id: 'washing_machine_prep',
+    name: 'Washing Machine Prep',
+    frequency: 'alternate-day',
+    anchorDate: '2026-01-01',
+    intervalDays: 2,
+    description: 'Load and run washing machine cycle (night before).',
+    xp: 12,
+    category: 'Home & Living',
+    attributes: { LIFE: 0.8, WIL: 0.2 },
+    isTradeable: true
+  },
+  {
+    id: 'cat_litter',
+    name: "Puppy Potty & Cat's Litter",
+    frequency: 'alternate-day',
+    anchorDate: '2026-01-02',
+    intervalDays: 2,
+    description: 'Clean and sanitize pet litter and potty area.',
+    xp: 14,
+    category: 'Home & Living',
+    attributes: { LIFE: 0.8, WIL: 0.3 },
+    isTradeable: true
+  },
+  {
+    id: 'reading',
+    name: 'Focused Reading & Mind',
+    frequency: 'daily',
+    description: 'Deep reading session (books, studies, courses).',
+    xp: 15,
+    category: 'Learning & Mind',
+    attributes: { INT: 1.2, WIL: 0.3 },
+    isTradeable: false // Personal growth habit - cannot be traded
+  },
+  {
+    id: 'workout',
+    name: 'Movement & Training',
+    frequency: 'daily',
+    description: 'Daily physical workout, yoga, or movement session.',
+    xp: 18,
+    category: 'Fitness & Body',
+    attributes: { STR: 1.2, WIL: 0.4 },
+    isTradeable: false // Personal growth habit - cannot be traded
+  }
+];
+
+export function getProfileCoreResponsibilities(profile = 'ram') {
+  return profile === 'sister' ? SISTER_CORE_RESPONSIBILITIES : RAM_CORE_RESPONSIBILITIES;
+}
+
+export const CORE_RESPONSIBILITIES_CONFIG = RAM_CORE_RESPONSIBILITIES;
 
 /**
  * Task Library — keyword-matched archetypes for auto-weighting custom tasks.
@@ -144,7 +259,9 @@ const TASK_LIBRARY = [
       'jhaadu', 'jhadu', 'pocha', 'pochha', 'mop floor', 'sweep floor',
       'tidy', 'tidying', 'organize', 'organizing', 'declutter', 'decluttering',
       'trash', 'garbage', 'bin', 'recycling', 'make bed', 'sheets', 'bedding',
-      'plants', 'water plants', 'fix', 'repair', 'chores'
+      'plants', 'water plants', 'water the plants', 'water plant', 'plant care',
+      'cat litter', 'cats litter', 'litter box', 'clean litter', 'puppy potty', 'puppy poop', 'dog walk', 'pet care',
+      'fix', 'repair', 'chores'
     ],
     xp: 12,
     attributes: { LIFE: 0.9, WIL: 0.3 }
