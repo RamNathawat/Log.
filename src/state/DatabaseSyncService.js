@@ -15,6 +15,8 @@ class DatabaseSyncService {
     this.onRemoteUpdate = null;
     this.onTradesUpdate = null;
     this.broadcastChannel = null;
+    // Cached sibling task snapshot (populated from Firestore trade channel doc)
+    this._siblingSnapshot = null;
 
     // Set up local cross-tab / cross-profile storage sync
     if (typeof window !== 'undefined') {
@@ -152,10 +154,13 @@ class DatabaseSyncService {
 
       try {
         const tradeSnap = await getDoc(tradeDocRef);
-        if (tradeSnap.exists() && this.onTradesUpdate) {
+        if (tradeSnap.exists()) {
           const data = tradeSnap.data();
+          // Cache sibling's task snapshot (keyed by their sync key)
+          const sibSnapshotKey = `snapshot_${siblingKey.toUpperCase()}`;
+          if (data[sibSnapshotKey]) this._siblingSnapshot = data[sibSnapshotKey];
           this.saveLocalTrades(pairKey, data);
-          this.onTradesUpdate(data);
+          if (this.onTradesUpdate) this.onTradesUpdate(data);
         }
       } catch (err) {
         console.warn('Firestore trade channel fetch warning:', err.message || err);
@@ -165,10 +170,13 @@ class DatabaseSyncService {
         this.tradeUnsubscribe = onSnapshot(
           tradeDocRef,
           (docSnap) => {
-            if (docSnap.exists() && this.onTradesUpdate) {
+            if (docSnap.exists()) {
               const data = docSnap.data();
+              // Always refresh sibling snapshot on every update
+              const sibSnapshotKey = `snapshot_${(this.siblingKey || siblingKey).toUpperCase()}`;
+              if (data[sibSnapshotKey]) this._siblingSnapshot = data[sibSnapshotKey];
               this.saveLocalTrades(pairKey, data);
-              this.onTradesUpdate(data);
+              if (this.onTradesUpdate) this.onTradesUpdate(data);
             }
           },
           (err) => {
@@ -195,6 +203,11 @@ class DatabaseSyncService {
     this.isSyncing = false;
   }
 
+  /**
+   * Push trade data to Firestore and local storage.
+   * Optionally embed a siblingSnapshot so the other device can
+   * populate the "swap for sibling's task" dropdown without localStorage.
+   */
   async pushTradeData(myKey, siblingKey, tradeChannelData) {
     const pairKey = this.getPairKey(myKey, siblingKey);
     if (!pairKey) return;
@@ -213,6 +226,34 @@ class DatabaseSyncService {
     } catch (err) {
       console.warn('Firestore push trade data warning:', err.message || err);
     }
+  }
+
+  /**
+   * Push a lightweight snapshot of the caller's current task list into the
+   * trade channel doc under the caller's sync key. The sibling device reads
+   * this to populate the "swap" dropdown without needing localStorage access.
+   * @param {string} myKey  - e.g. 'OS2290'
+   * @param {string} sibKey - e.g. 'OS1837'
+   * @param {Array}  tasks  - array of { id, name, category } objects
+   */
+  async pushMyTaskSnapshot(myKey, sibKey, tasks) {
+    const pairKey = this.getPairKey(myKey, sibKey);
+    if (!pairKey || !this.db) return;
+    try {
+      const tradeDocRef = doc(this.db, 'users', `trade_channel_${pairKey}`);
+      const fieldKey = `snapshot_${myKey.toUpperCase()}`;
+      await setDoc(tradeDocRef, { [fieldKey]: tasks, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore pushMyTaskSnapshot warning:', err.message || err);
+    }
+  }
+
+  /**
+   * Returns the sibling's cached task snapshot fetched from the trade channel.
+   * @returns {Array|null}
+   */
+  getSiblingSnapshot() {
+    return this._siblingSnapshot;
   }
 
   async pushState(state) {

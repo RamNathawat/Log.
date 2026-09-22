@@ -75,7 +75,8 @@ function renderApp() {
       (taskId, type, data) => store.exemptTask(taskId, type, data),
       (taskId) => store.unexemptTask(taskId),
       (tradeData) => store.sendTradeOffer(tradeData),
-      (tradeId, action, counterData) => store.respondToTrade(tradeId, action, counterData)
+      (tradeId, action, counterData) => store.respondToTrade(tradeId, action, counterData),
+      (tradeId) => store.cancelTradeOffer(tradeId)
     );
 
     // Daily Challenge

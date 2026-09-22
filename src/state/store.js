@@ -120,6 +120,10 @@ class Store {
     for (const listener of this.listeners) {
       listener(this.state);
     }
+    // Debounce task snapshot push so sibling always has current data
+    // without hammering Firestore on every render cycle.
+    clearTimeout(this._snapshotPushTimer);
+    this._snapshotPushTimer = setTimeout(() => this._pushMyTaskSnapshot(), 2000);
   }
 
   setUserProfile(profile) {
@@ -190,6 +194,8 @@ class Store {
         }
       }
     );
+    // Push a fresh task snapshot so sibling can see our tasks immediately
+    setTimeout(() => this._pushMyTaskSnapshot(), 1500);
   }
 
   getCurrentPeriod() {
@@ -721,6 +727,29 @@ class Store {
       exemptions: this.state.taskExemptions || {},
       updatedAt: new Date().toISOString()
     });
+    // Also keep sibling's snapshot of my tasks current
+    this._pushMyTaskSnapshot();
+  }
+
+  /**
+   * Pushes a lightweight snapshot of this user's current tradeable tasks
+   * to the shared Firestore trade channel doc so the sibling device can
+   * read them when building the "swap" dropdown in TradeModal.
+   */
+  _pushMyTaskSnapshot() {
+    if (!this.state.syncKey || !this.state.siblingSyncKey) return;
+    const profile = this.state.profile || 'ram';
+    const dueList = RecurrenceEngine.getDueResponsibilities(undefined, profile);
+    const delegated = this.state.delegatedTasks || {};
+    const tradeableTasks = [
+      ...dueList
+        .filter(t => t.isTradeable !== false && t.id !== 'reading' && t.id !== 'workout' && !delegated[t.id])
+        .map(t => ({ id: t.id, name: t.name, category: t.category || 'Core Habit' })),
+      ...(this.state.customTasks || [])
+        .filter(t => !t.completed && !t.postponed && !delegated[t.id])
+        .map(t => ({ id: t.id, name: t.name, category: t.category || 'Custom Habit' }))
+    ];
+    dbSync.pushMyTaskSnapshot(this.state.syncKey, this.state.siblingSyncKey, tradeableTasks);
   }
 
   _syncAcceptedTradesToState() {
@@ -738,10 +767,10 @@ class Store {
               name: trade.taskName,
               xp: 15,
               attributes: { LIFE: 0.8, WIL: 0.3 },
-              category: 'Barter',
-              tag: `Traded from ${trade.fromName || 'Sibling'}`,
-              color: '#8B5CF6',
-              bg: '#EDE9FE',
+              category: 'Chore',
+              tag: 'Traded',
+              color: 'var(--color-text-primary)',
+              bg: 'var(--color-surface-subtle)',
               completed: false,
               completedAt: null,
               addedAt: new Date().toISOString(),
@@ -781,10 +810,10 @@ class Store {
                 name: trade.swapTaskName,
                 xp: 15,
                 attributes: { LIFE: 0.8, WIL: 0.3 },
-                category: 'Barter',
-                tag: `Traded from Sibling`,
-                color: '#8B5CF6',
-                bg: '#EDE9FE',
+                category: 'Chore',
+                tag: 'Traded',
+                color: 'var(--color-text-primary)',
+                bg: 'var(--color-surface-subtle)',
                 completed: false,
                 completedAt: null,
                 addedAt: new Date().toISOString(),
@@ -830,6 +859,17 @@ class Store {
     return newTrade;
   }
 
+  cancelTradeOffer(tradeId) {
+    const trade = (this.state.trades || []).find(t => t.id === tradeId);
+    if (!trade) return;
+    trade.status = 'CANCELLED';
+    trade.resolvedAt = new Date().toISOString();
+    this.addLog('TRADE_CANCELLED', `Cancelled trade offer for "${trade.taskName}".`);
+    this.evaluateRecreationUnlock();
+    this.notify();
+    this._syncTradeChannel();
+  }
+
   respondToTrade(tradeId, action, counterData = null) {
     const trade = (this.state.trades || []).find(t => t.id === tradeId);
     if (!trade) return;
@@ -845,10 +885,10 @@ class Store {
           name: trade.taskName,
           xp: 15,
           attributes: { LIFE: 0.8, WIL: 0.3 },
-          category: 'Barter',
-          tag: `Traded from ${trade.fromName || 'Sibling'}`,
-          color: '#8B5CF6',
-          bg: '#EDE9FE',
+          category: 'Chore',
+          tag: 'Traded',
+          color: 'var(--color-text-primary)',
+          bg: 'var(--color-surface-subtle)',
           completed: false,
           completedAt: null,
           addedAt: new Date().toISOString(),
@@ -878,10 +918,10 @@ class Store {
             name: trade.swapTaskName,
             xp: 15,
             attributes: { LIFE: 0.8, WIL: 0.3 },
-            category: 'Barter',
-            tag: `Traded from Sibling`,
-            color: '#8B5CF6',
-            bg: '#EDE9FE',
+            category: 'Chore',
+            tag: 'Traded',
+            color: 'var(--color-text-primary)',
+            bg: 'var(--color-surface-subtle)',
             completed: false,
             completedAt: null,
             addedAt: new Date().toISOString(),

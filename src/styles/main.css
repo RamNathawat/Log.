@@ -2356,18 +2356,33 @@ html, body {
 }
 
 .task-item.is-exempt {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.03);
+  border-color: var(--color-border);
+  background: var(--color-surface-subtle);
 }
 
-.task-item.is-delegated {
-  border-color: rgba(139, 92, 246, 0.35);
-  background: rgba(139, 92, 246, 0.03);
-  opacity: 0.85;
+.task-item.is-trade-pending {
+  opacity: 0.52;
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border-subtle);
+  cursor: default;
+  transition: opacity 250ms ease;
+}
+
+.task-item.is-trade-pending .task-checkbox {
+  opacity: 0.45;
+  border-color: var(--color-border-subtle);
+}
+
+.task-item.is-trade-pending .task-label {
+  color: var(--color-text-tertiary);
 }
 
 .trade-request-card {
   transition: transform 150ms ease, box-shadow 150ms ease;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: 14px;
+  padding: 14px 16px;
 }
 
 .trade-request-card:hover {

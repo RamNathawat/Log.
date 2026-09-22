@@ -37,8 +37,8 @@ export function renderProgressScreen(state) {
   const activeCustomToday = customTasks.filter(t => !t.postponed && !exemptions[t.id] && !delegated[t.id]);
   const totalDueToday = activeDueToday.length + activeCustomToday.length;
   const completedToday =
-    dueToday.filter(item => state.dailyResponsibilities[item.id]?.completed).length
-    + customTasks.filter(t => t.completed).length;
+    activeDueToday.filter(item => state.dailyResponsibilities[item.id]?.completed).length
+    + activeCustomToday.filter(t => t.completed).length;
   const liveTodayRate = totalDueToday > 0 ? Math.min(100, Math.round((completedToday / totalDueToday) * 100)) : 0;
 
   // ─── 7-day history ────────────────────────────────────────────────────────

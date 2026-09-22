@@ -1,5 +1,6 @@
 import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
 import { StorageService } from '../state/StorageService.js';
+import { dbSync } from '../state/DatabaseSyncService.js';
 import { haptics } from '../services/hapticsService.js';
 import { renderExemptionModal } from './ExemptionModal.js';
 import { renderTradeModal } from './TradeModal.js';
@@ -18,7 +19,8 @@ export function renderDueResponsibilities(
   onExemptTask,
   onUnexemptTask,
   onSendTrade,
-  onRespondTrade
+  onRespondTrade,
+  onCancelTrade
 ) {
   const profile = state.profile || 'ram';
   const dueList = RecurrenceEngine.getDueResponsibilities(undefined, profile);
@@ -31,8 +33,8 @@ export function renderDueResponsibilities(
   const activeCore = dueList.filter(item => !postponedCore[item.id] && !exemptions[item.id] && !delegated[item.id]);
   const activeCustom = customTasks.filter(t => !t.postponed && !exemptions[t.id] && !delegated[t.id]);
 
-  const completedCore = dueList.filter((item) => state.dailyResponsibilities[item.id]?.completed).length;
-  const completedCustom = customTasks.filter(t => t.completed).length;
+  const completedCore = activeCore.filter((item) => state.dailyResponsibilities[item.id]?.completed).length;
+  const completedCustom = activeCustom.filter(t => t.completed).length;
   const totalComplete = completedCore + completedCustom;
   const totalDue = activeCore.length + activeCustom.length;
   const allDone = totalComplete >= totalDue && totalDue > 0;
@@ -53,14 +55,14 @@ export function renderDueResponsibilities(
   `;
 
   // ── Helper: unified status pill for both task types ─────────────────────
-  function getTaskStatusPill(taskId, isCore, postponedDays, isPostponed) {
+  function getTaskStatusPill(taskId, isCore, postponedDays, isPostponed, isTradePending) {
+    if (isTradePending) {
+      return `<span class="postpone-pill" style="font-style:italic;opacity:0.85;">awaiting response…</span>`;
+    }
+
     if (exemptions[taskId]) {
       const reason = exemptions[taskId].reason || 'Exempt';
       return `<span class="postpone-pill">exempt: ${reason}</span>`;
-    }
-
-    if (delegated[taskId]) {
-      return `<span class="postpone-pill">traded to sibling</span>`;
     }
 
     if (!isPostponed) return '';
@@ -81,79 +83,106 @@ export function renderDueResponsibilities(
     }
   }
 
-  // ── Core task rows ─────────────────────────────────────────────────────────
-  const coreTasksHtml = dueList.map((task) => {
-    const isDone = Boolean(state.dailyResponsibilities[task.id]?.completed);
-    const xp = task.xp || 15;
-    const catLabel = task.category || 'Daily';
-    const isPostponed = Boolean(postponedCore[task.id]);
-    const isExempt = Boolean(exemptions[task.id]);
-    const isDelegated = Boolean(delegated[task.id]);
-    const days = postponedCore[task.id]?.postponedDays || 0;
-    const uClass = isExempt ? 'is-exempt' : isDelegated ? 'is-delegated' : !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
-    const pill = getTaskStatusPill(task.id, true, days, isPostponed);
+  // ── Core task rows (Delegated tasks are removed from the active list) ───────
+  const coreTasksHtml = dueList
+    .filter(task => !delegated[task.id])
+    .map((task) => {
+      const isDone = Boolean(state.dailyResponsibilities[task.id]?.completed);
+      const xp = task.xp || 15;
+      const catLabel = task.category || 'Daily';
+      const isPostponed = Boolean(postponedCore[task.id]);
+      const isExempt = Boolean(exemptions[task.id]);
+      const isTradePending = (state.trades || []).some(t => 
+        (t.status === 'PENDING' || t.status === 'COUNTER_OFFER') && 
+        t.fromUser === state.syncKey && 
+        t.taskId === task.id
+      );
+      const days = postponedCore[task.id]?.postponedDays || 0;
+      const uClass = isTradePending 
+        ? 'is-trade-pending' 
+        : isExempt 
+          ? 'is-exempt' 
+          : !isPostponed 
+            ? '' 
+            : days <= 1 ? 'postpone-1' : 'postpone-2';
+      const pill = getTaskStatusPill(task.id, true, days, isPostponed, isTradePending);
 
-    return `
-      <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
-           data-id="${task.id}" data-type="core" role="button" aria-pressed="${isDone}">
-        <div class="task-left">
-          <div class="task-checkbox ${isDone ? 'checked' : ''}">
-            ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
-            <span class="task-label">${task.name}</span>
-            <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-              <span class="category-pill pill-neutral">${catLabel}</span>
-              ${task.frequency === 'alternate-day' ? `<span class="category-pill pill-alt">Alt. Day</span>` : ''}
-              ${pill}
+      return `
+        <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
+             data-id="${task.id}" data-type="core" role="button" aria-pressed="${isDone}">
+          <div class="task-left">
+            <div class="task-checkbox ${isDone ? 'checked' : ''}">
+              ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+              <span class="task-label">${task.name}</span>
+              <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                <span class="category-pill pill-neutral">${catLabel}</span>
+                ${task.frequency === 'alternate-day' ? `<span class="category-pill pill-alt">Alt. Day</span>` : ''}
+                ${pill}
+              </div>
             </div>
           </div>
-        </div>
-        <div class="task-right">
-          <span class="task-xp-tag">+${xp}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  // ── Custom task rows ───────────────────────────────────────────────────────
-  const customTasksHtml = customTasks.map((task) => {
-    const isDone = Boolean(task.completed);
-    const catTag = task.tag || task.category || 'Custom';
-    const days = task.postponedDays || 0;
-    const isPostponed = Boolean(task.postponed);
-    const isExempt = Boolean(exemptions[task.id]);
-    const isDelegated = Boolean(delegated[task.id]);
-    const uClass = isExempt ? 'is-exempt' : isDelegated ? 'is-delegated' : !isPostponed ? '' : days <= 1 ? 'postpone-1' : 'postpone-2';
-    const pill = getTaskStatusPill(task.id, false, days, isPostponed);
-
-    return `
-      <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
-           data-id="${task.id}" data-type="custom" role="button" aria-pressed="${isDone}">
-        <div class="task-left">
-          <div class="task-checkbox ${isDone ? 'checked' : ''}">
-            ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+          <div class="task-right">
+            <span class="task-xp-tag">+${xp}</span>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
-            <span class="task-label">${task.name}</span>
-            <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-              <span class="category-pill pill-neutral">${catTag}</span>
-              ${pill}
+        </div>
+      `;
+    }).join('');
+
+  // ── Custom task rows (Delegated tasks are removed from the active list) ─────
+  const customTasksHtml = customTasks
+    .filter(task => !delegated[task.id])
+    .map((task) => {
+      const isDone = Boolean(task.completed);
+      const isTraded = Boolean(task.isTraded);
+      const catTag = isTraded ? 'Traded' : (task.tag || task.category || 'Custom');
+      const days = task.postponedDays || 0;
+      const isPostponed = Boolean(task.postponed);
+      const isExempt = Boolean(exemptions[task.id]);
+      const isTradePending = (state.trades || []).some(t => 
+        (t.status === 'PENDING' || t.status === 'COUNTER_OFFER') && 
+        t.fromUser === state.syncKey && 
+        t.taskId === task.id
+      );
+      const uClass = isTradePending 
+        ? 'is-trade-pending' 
+        : isExempt 
+          ? 'is-exempt' 
+          : !isPostponed 
+            ? '' 
+            : days <= 1 ? 'postpone-1' : 'postpone-2';
+      const pill = getTaskStatusPill(task.id, false, days, isPostponed, isTradePending);
+
+      return `
+        <div class="task-item ${isDone ? 'is-completed' : ''} ${uClass}"
+             data-id="${task.id}" data-type="custom" role="button" aria-pressed="${isDone}">
+          <div class="task-left">
+            <div class="task-checkbox ${isDone ? 'checked' : ''}">
+              ${isDone ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+              <span class="task-label">${task.name}</span>
+              <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                <span class="category-pill pill-neutral">${catTag}</span>
+                ${pill}
+              </div>
             </div>
           </div>
+          <div class="task-right">
+            ${!isTraded ? `
+              <button class="task-remove-btn" data-remove-id="${task.id}" title="Remove task" aria-label="Remove ${task.name}">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </button>
+            ` : ''}
+            <span class="task-xp-tag">+${task.xp}</span>
+          </div>
         </div>
-        <div class="task-right">
-          <button class="task-remove-btn" data-remove-id="${task.id}" title="Remove task" aria-label="Remove ${task.name}">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <span class="task-xp-tag">+${task.xp}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
 
   // Recreation status
   const rec = state.recreation;
@@ -216,7 +245,16 @@ export function renderDueResponsibilities(
 
   // Render incoming trade cards
   const tradeMount = element.querySelector('#trade-requests-mount');
-  const availableTasksForSwap = [...dueList, ...customTasks].filter(t => !state.dailyResponsibilities[t.id]?.completed && !t.completed);
+  const availableTasksForSwap = [...dueList, ...customTasks].filter(t => 
+    t.isTradeable !== false && 
+    t.id !== 'reading' && 
+    t.id !== 'workout' && 
+    !t.id.startsWith('reading') && 
+    !t.id.startsWith('workout') && 
+    !state.dailyResponsibilities[t.id]?.completed && 
+    !t.completed &&
+    !delegated[t.id]
+  );
   const tradeCardsEl = renderTradeRequestCards(
     state.trades || [],
     state.syncKey,
@@ -410,29 +448,24 @@ export function renderDueResponsibilities(
 
     sheet.querySelector('#as-trade')?.addEventListener('click', () => {
       close();
-      const siblingProfile = (profile === 'sister') ? 'ram' : 'sister';
-      const siblingCoreDue = RecurrenceEngine.getDueResponsibilities(undefined, siblingProfile)
-        .filter(t => t.isTradeable !== false && t.id !== 'reading' && t.id !== 'workout');
 
-      // Check if sibling saved state has any custom tasks
-      const siblingState = StorageService.load(siblingProfile);
-      let siblingCustom = [];
-      if (siblingState && siblingState.customTasks) {
-        siblingCustom = siblingState.customTasks.filter(t => !t.completed && t.isTradeable !== false);
+      // Priority: Firestore-cached sibling snapshot (works cross-device)
+      // Fallback: localStorage (same-device testing only)
+      let siblingAvailableTasks = dbSync.getSiblingSnapshot() || [];
+
+      if (siblingAvailableTasks.length === 0) {
+        // Same-device fallback
+        const siblingProfile = (profile === 'sister') ? 'ram' : 'sister';
+        const siblingCoreDue = RecurrenceEngine.getDueResponsibilities(undefined, siblingProfile)
+          .filter(t => t.isTradeable !== false && t.id !== 'reading' && t.id !== 'workout');
+        const siblingState = StorageService.load(siblingProfile);
+        const siblingCustom = (siblingState?.customTasks || [])
+          .filter(t => !t.completed && t.isTradeable !== false);
+        siblingAvailableTasks = [
+          ...siblingCoreDue.map(t => ({ id: t.id, name: t.name, category: t.category || 'Core Habit' })),
+          ...siblingCustom.map(t => ({ id: t.id, name: t.name, category: t.category || 'Custom Habit' }))
+        ];
       }
-
-      const siblingAvailableTasks = [
-        ...siblingCoreDue.map(t => ({
-          id: t.id,
-          name: t.name,
-          category: t.category || 'Core Habit'
-        })),
-        ...siblingCustom.map(t => ({
-          id: t.id,
-          name: t.name,
-          category: t.category || 'Custom Habit'
-        }))
-      ];
 
       renderTradeModal(taskObj, type, siblingAvailableTasks, onSendTrade, null, false);
     });
@@ -441,6 +474,83 @@ export function renderDueResponsibilities(
       close();
       haptics.impactMedium?.();
       onRemoveTask(taskId);
+    });
+  }
+
+  // ── Bottom sheet for managing a pending trade proposal ──────────────────
+  function showPendingTradeSheet(taskId, type) {
+    const pendingTrade = (state.trades || []).find(t => 
+      (t.status === 'PENDING' || t.status === 'COUNTER_OFFER') && 
+      t.fromUser === state.syncKey && 
+      t.taskId === taskId
+    );
+    if (!pendingTrade) return;
+
+    document.querySelectorAll('.action-sheet-backdrop').forEach(b => b.remove());
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'action-sheet-backdrop';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'action-sheet';
+    sheet.innerHTML = `
+      <div class="action-sheet-handle"></div>
+      <div class="action-sheet-title">Trade Sent</div>
+
+      <div style="padding: 4px 0 16px;">
+        <div style="font-size: 16px; font-weight: 700; color: var(--color-text-primary); letter-spacing: -0.02em; margin-bottom: 6px;">
+          ${pendingTrade.taskName}
+        </div>
+        <div style="font-size: 13px; color: var(--color-text-secondary); line-height: 1.5;">
+          ${pendingTrade.swapTaskName
+            ? `Proposed to swap with <strong style="color:var(--color-text-primary)">${pendingTrade.swapTaskName}</strong>.`
+            : 'Trade offer sent — waiting for sibling to respond.'}
+          ${pendingTrade.note ? `<br/><span style="color:var(--color-text-primary);font-style:italic;margin-top:4px;display:block;">Note: "${pendingTrade.note}"</span>` : ''}
+        </div>
+      </div>
+
+      <div class="action-sheet-list">
+        <button class="action-sheet-item action-sheet-item--destructive" id="as-cancel-trade-proposal">
+          <div class="action-sheet-item-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </div>
+          <div class="action-sheet-item-text">
+            <span class="action-sheet-item-label">Withdraw Trade Offer</span>
+            <span class="action-sheet-item-sub">Cancels the proposal and returns task to your list</span>
+          </div>
+        </button>
+      </div>
+
+      <button class="action-sheet-cancel" id="as-close-pending-trade">Keep Waiting</button>
+    `;
+
+    backdrop.appendChild(sheet);
+    document.body.appendChild(backdrop);
+
+    void sheet.offsetHeight;
+    requestAnimationFrame(() => {
+      backdrop.classList.add('visible');
+      sheet.classList.add('visible');
+    });
+
+    function close() {
+      backdrop.classList.remove('visible');
+      sheet.classList.remove('visible');
+      setTimeout(() => backdrop.remove(), 320);
+    }
+
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    sheet.querySelector('#as-close-pending-trade').addEventListener('click', close);
+
+    sheet.querySelector('#as-cancel-trade-proposal').addEventListener('click', () => {
+      close();
+      haptics.impactMedium?.();
+      if (onCancelTrade) {
+        onCancelTrade(pendingTrade.id);
+      }
     });
   }
 
@@ -458,7 +568,11 @@ export function renderDueResponsibilities(
       if (Date.now() - lastLongPressTime < 800) return; // Prevent double trigger from touch
       didLongPress = true;
       lastLongPressTime = Date.now();
-      showPostponeSheet(row.dataset.id, type);
+      if (row.classList.contains('is-trade-pending')) {
+        showPendingTradeSheet(row.dataset.id, type);
+      } else {
+        showPostponeSheet(row.dataset.id, type);
+      }
     });
 
     // Touch & Pointer: long-press → postpone sheet
@@ -472,7 +586,11 @@ export function renderDueResponsibilities(
         didLongPress = true;
         lastLongPressTime = Date.now();
         haptics.impactMedium?.();
-        showPostponeSheet(row.dataset.id, type);
+        if (row.classList.contains('is-trade-pending')) {
+          showPendingTradeSheet(row.dataset.id, type);
+        } else {
+          showPostponeSheet(row.dataset.id, type);
+        }
       }, 480);
     });
 
@@ -496,10 +614,14 @@ export function renderDueResponsibilities(
       }
     });
 
-    // Normal click = toggle
+    // Normal click = toggle (or open pending trade sheet if pending)
     row.addEventListener('click', (e) => {
       if (e.target.closest('.task-remove-btn')) return;
       if (didLongPress || Date.now() - lastLongPressTime < 400) return;
+      if (row.classList.contains('is-trade-pending')) {
+        showPendingTradeSheet(row.dataset.id, type);
+        return;
+      }
       haptics.impactLight?.();
       if (type === 'core') onToggle(row.dataset.id);
       else onToggleCustomTask(row.dataset.id);
