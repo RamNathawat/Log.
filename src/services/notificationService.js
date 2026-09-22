@@ -54,12 +54,10 @@ class NotificationService {
     }
 
     if (!this.supported) {
-      console.warn('[Notif] Web Notifications not supported in this browser.');
       return false;
     }
     if (this.permission === 'granted') return true;
     if (this.permission === 'denied') {
-      console.warn('[Notif] Permission previously denied. Reset in browser settings.');
       return false;
     }
 

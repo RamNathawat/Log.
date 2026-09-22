@@ -42,10 +42,10 @@ export function renderTradeModal(task, type, availableSwapTasks, onSendTrade, on
     ${availableSwapTasks && availableSwapTasks.length > 0 ? `
       <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">
         <label for="trade-swap-select" style="font-size: 11px; font-weight: 600; font-family: var(--font-mono); text-transform: uppercase; color: var(--color-text-tertiary); letter-spacing: 0.05em;">
-          Optional: Propose Task Swap
+          ${isCounterOffer ? 'Swap for Different Task (Optional)' : "Swap for Sibling's Task (Optional)"}
         </label>
         <select id="trade-swap-select" class="add-task-input-v2" style="width: 100%; box-sizing: border-box; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer;">
-          <option value="">-- No task swap (Favor note only) --</option>
+          <option value="">-- No direct swap (Note / Favor only) --</option>
           ${swapOptionsHtml}
         </select>
       </div>

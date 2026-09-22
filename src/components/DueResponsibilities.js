@@ -1,4 +1,5 @@
 import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
+import { StorageService } from '../state/StorageService.js';
 import { haptics } from '../services/hapticsService.js';
 import { renderExemptionModal } from './ExemptionModal.js';
 import { renderTradeModal } from './TradeModal.js';
@@ -409,8 +410,31 @@ export function renderDueResponsibilities(
 
     sheet.querySelector('#as-trade')?.addEventListener('click', () => {
       close();
-      const availableSwap = [...dueList, ...customTasks].filter(t => t.id !== taskId && !state.dailyResponsibilities[t.id]?.completed && !t.completed);
-      renderTradeModal(taskObj, type, availableSwap, onSendTrade, null, false);
+      const siblingProfile = (profile === 'sister') ? 'ram' : 'sister';
+      const siblingCoreDue = RecurrenceEngine.getDueResponsibilities(undefined, siblingProfile)
+        .filter(t => t.isTradeable !== false && t.id !== 'reading' && t.id !== 'workout');
+
+      // Check if sibling saved state has any custom tasks
+      const siblingState = StorageService.load(siblingProfile);
+      let siblingCustom = [];
+      if (siblingState && siblingState.customTasks) {
+        siblingCustom = siblingState.customTasks.filter(t => !t.completed && t.isTradeable !== false);
+      }
+
+      const siblingAvailableTasks = [
+        ...siblingCoreDue.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || 'Core Habit'
+        })),
+        ...siblingCustom.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || 'Custom Habit'
+        }))
+      ];
+
+      renderTradeModal(taskObj, type, siblingAvailableTasks, onSendTrade, null, false);
     });
 
     sheet.querySelector('#as-delete')?.addEventListener('click', () => {

@@ -100,6 +100,8 @@ class Store {
       StorageService.save(this.state, this.state.profile);
       StorageService.setActiveProfile(this.state.profile);
     }
+
+    this._syncAcceptedTradesToState();
   }
 
   getState() {
@@ -181,6 +183,7 @@ class Store {
         if (!tradeChannelData) return;
         const channelTrades = tradeChannelData.trades || [];
         this.state.trades = channelTrades;
+        this._syncAcceptedTradesToState();
         StorageService.save(this.state, this.state.profile);
         for (const listener of this.listeners) {
           listener(this.state);
@@ -718,6 +721,89 @@ class Store {
       exemptions: this.state.taskExemptions || {},
       updatedAt: new Date().toISOString()
     });
+  }
+
+  _syncAcceptedTradesToState() {
+    if (!this.state.trades || !this.state.syncKey) return;
+    let changed = false;
+
+    for (const trade of this.state.trades) {
+      if (trade.status === 'ACCEPTED') {
+        // If current user is the recipient (toUser)
+        if (trade.toUser === this.state.syncKey) {
+          const alreadyAdopted = (this.state.customTasks || []).some(t => t.tradeId === trade.id);
+          if (!alreadyAdopted) {
+            const adopted = {
+              id: `traded_${trade.taskId}_${Date.now()}`,
+              name: trade.taskName,
+              xp: 15,
+              attributes: { LIFE: 0.8, WIL: 0.3 },
+              category: 'Barter',
+              tag: `Traded from ${trade.fromName || 'Sibling'}`,
+              color: '#8B5CF6',
+              bg: '#EDE9FE',
+              completed: false,
+              completedAt: null,
+              addedAt: new Date().toISOString(),
+              postponed: false,
+              postponedDays: 0,
+              isTraded: true,
+              tradeId: trade.id
+            };
+            this.state.customTasks = [...(this.state.customTasks || []), adopted];
+            changed = true;
+          }
+
+          if (trade.swapTaskId && !this.state.delegatedTasks?.[trade.swapTaskId]) {
+            this.state.delegatedTasks = {
+              ...(this.state.delegatedTasks || {}),
+              [trade.swapTaskId]: { tradeId: trade.id, tradedTo: trade.fromUser }
+            };
+            changed = true;
+          }
+        }
+
+        // If current user is the sender (fromUser)
+        if (trade.fromUser === this.state.syncKey) {
+          if (!this.state.delegatedTasks?.[trade.taskId]) {
+            this.state.delegatedTasks = {
+              ...(this.state.delegatedTasks || {}),
+              [trade.taskId]: { tradeId: trade.id, tradedTo: trade.toUser }
+            };
+            changed = true;
+          }
+
+          if (trade.swapTaskId && trade.swapTaskName) {
+            const alreadyAdopted = (this.state.customTasks || []).some(t => t.tradeId === trade.id);
+            if (!alreadyAdopted) {
+              const adopted = {
+                id: `traded_${trade.swapTaskId}_${Date.now()}`,
+                name: trade.swapTaskName,
+                xp: 15,
+                attributes: { LIFE: 0.8, WIL: 0.3 },
+                category: 'Barter',
+                tag: `Traded from Sibling`,
+                color: '#8B5CF6',
+                bg: '#EDE9FE',
+                completed: false,
+                completedAt: null,
+                addedAt: new Date().toISOString(),
+                postponed: false,
+                postponedDays: 0,
+                isTraded: true,
+                tradeId: trade.id
+              };
+              this.state.customTasks = [...(this.state.customTasks || []), adopted];
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      this.evaluateRecreationUnlock();
+    }
   }
 
   sendTradeOffer({ taskId, taskName, type, note, swapTaskId, swapTaskName }) {

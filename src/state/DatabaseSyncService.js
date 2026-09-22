@@ -14,17 +14,48 @@ class DatabaseSyncService {
     this.isSyncing = false;
     this.onRemoteUpdate = null;
     this.onTradesUpdate = null;
+    this.broadcastChannel = null;
+
+    // Set up local cross-tab / cross-profile storage sync
+    if (typeof window !== 'undefined') {
+      try {
+        if ('BroadcastChannel' in window) {
+          this.broadcastChannel = new BroadcastChannel('log_trade_channel');
+          this.broadcastChannel.onmessage = (event) => {
+            if (event.data && this.onTradesUpdate) {
+              this.onTradesUpdate(event.data);
+            }
+          };
+        }
+      } catch (e) {
+        console.debug('[DatabaseSyncService] BroadcastChannel not supported/allowed:', e);
+      }
+
+      window.addEventListener('storage', (event) => {
+        if (event.key && event.key.startsWith('system_os_shared_trades_') && event.newValue) {
+          try {
+            const data = JSON.parse(event.newValue);
+            if (this.onTradesUpdate) {
+              this.onTradesUpdate(data);
+            }
+          } catch (e) {
+            // ignore JSON parse error
+          }
+        }
+      });
+    }
+
     this.initFirebase();
   }
 
   initFirebase() {
     try {
-      if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+      if (firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY') {
         this.app = initializeApp(firebaseConfig);
         this.db = getFirestore(this.app);
       }
     } catch (e) {
-      console.warn("Firebase not initialized. Make sure firebaseConfig.js is set up.", e);
+      console.warn('Firebase not initialized. Make sure firebaseConfig.js is set up.', e);
     }
   }
 
@@ -33,26 +64,57 @@ class DatabaseSyncService {
     return [key1.toUpperCase(), key2.toUpperCase()].sort().join('_');
   }
 
-  async startSync(syncKey, siblingKey, onRemoteUpdate, onTradesUpdate) {
-    if (!this.db) {
-      console.warn("Cannot start sync: Firebase is not initialized.");
-      return;
+  getLocalTrades(pairKey) {
+    if (!pairKey || typeof localStorage === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(`system_os_shared_trades_${pairKey}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
     }
-    
+  }
+
+  saveLocalTrades(pairKey, tradeData) {
+    if (!pairKey || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(`system_os_shared_trades_${pairKey}`, JSON.stringify(tradeData));
+      if (this.broadcastChannel) {
+        this.broadcastChannel.postMessage(tradeData);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  async startSync(syncKey, siblingKey, onRemoteUpdate, onTradesUpdate) {
     this.syncKey = syncKey;
     this.siblingKey = siblingKey;
     this.onRemoteUpdate = onRemoteUpdate;
     this.onTradesUpdate = onTradesUpdate;
     this.isSyncing = true;
-    
-    // 1. Subscribe to personal remote state
+
+    const pairKey = this.getPairKey(syncKey, siblingKey);
+
+    // Immediately load local shared trade data if available
+    if (pairKey) {
+      const localTrades = this.getLocalTrades(pairKey);
+      if (localTrades && this.onTradesUpdate) {
+        this.onTradesUpdate(localTrades);
+      }
+    }
+
+    if (!this.db) {
+      return;
+    }
+
+    // 1. Subscribe to personal remote state under collection 'users'
     const docRef = doc(this.db, 'users', this.syncKey);
-    
+
     try {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const remoteState = snap.data();
-        this.onRemoteUpdate(remoteState);
+        if (this.onRemoteUpdate) this.onRemoteUpdate(remoteState);
       } else {
         const localState = StorageService.load();
         if (localState) {
@@ -60,49 +122,72 @@ class DatabaseSyncService {
         }
       }
     } catch (err) {
-      console.error("Error during initial sync:", err);
+      console.warn('Firestore initial user sync fallback:', err.message || err);
     }
 
-    this.unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists() && this.isSyncing) {
-        const remoteState = docSnap.data();
-        this.isSyncing = false; 
-        this.onRemoteUpdate(remoteState);
-        this.isSyncing = true;
-      }
-    });
+    try {
+      this.unsubscribe = onSnapshot(
+        docRef,
+        (docSnap) => {
+          if (docSnap.exists() && this.isSyncing && this.onRemoteUpdate) {
+            const remoteState = docSnap.data();
+            this.isSyncing = false;
+            this.onRemoteUpdate(remoteState);
+            this.isSyncing = true;
+          }
+        },
+        (err) => {
+          console.warn('Firestore user snapshot warning:', err.message || err);
+        }
+      );
+    } catch (err) {
+      console.warn('Firestore snapshot setup skipped:', err.message || err);
+    }
 
     // 2. Subscribe to real-time Sibling Trade & Accountability Channel
-    if (siblingKey) {
-      const pairKey = this.getPairKey(syncKey, siblingKey);
-      if (pairKey) {
-        const tradeDocRef = doc(this.db, 'trade_channels', pairKey);
-        
-        try {
-          const tradeSnap = await getDoc(tradeDocRef);
-          if (tradeSnap.exists() && this.onTradesUpdate) {
-            this.onTradesUpdate(tradeSnap.data());
-          }
-        } catch (err) {
-          console.error("Error fetching trade channel:", err);
-        }
+    // We store trade channels inside the 'users' collection (`users/trade_channel_${pairKey}`)
+    // to match Firestore security rules that allow `/users/{userId}`.
+    if (siblingKey && pairKey) {
+      const tradeDocRef = doc(this.db, 'users', `trade_channel_${pairKey}`);
 
-        this.tradeUnsubscribe = onSnapshot(tradeDocRef, (docSnap) => {
-          if (docSnap.exists() && this.onTradesUpdate) {
-            this.onTradesUpdate(docSnap.data());
+      try {
+        const tradeSnap = await getDoc(tradeDocRef);
+        if (tradeSnap.exists() && this.onTradesUpdate) {
+          const data = tradeSnap.data();
+          this.saveLocalTrades(pairKey, data);
+          this.onTradesUpdate(data);
+        }
+      } catch (err) {
+        console.warn('Firestore trade channel fetch warning:', err.message || err);
+      }
+
+      try {
+        this.tradeUnsubscribe = onSnapshot(
+          tradeDocRef,
+          (docSnap) => {
+            if (docSnap.exists() && this.onTradesUpdate) {
+              const data = docSnap.data();
+              this.saveLocalTrades(pairKey, data);
+              this.onTradesUpdate(data);
+            }
+          },
+          (err) => {
+            console.warn('Firestore trade channel listener warning:', err.message || err);
           }
-        });
+        );
+      } catch (err) {
+        console.warn('Firestore trade snapshot setup skipped:', err.message || err);
       }
     }
   }
 
   stopSync() {
     if (this.unsubscribe) {
-      this.unsubscribe();
+      try { this.unsubscribe(); } catch (e) {}
       this.unsubscribe = null;
     }
     if (this.tradeUnsubscribe) {
-      this.tradeUnsubscribe();
+      try { this.tradeUnsubscribe(); } catch (e) {}
       this.tradeUnsubscribe = null;
     }
     this.syncKey = null;
@@ -111,26 +196,33 @@ class DatabaseSyncService {
   }
 
   async pushTradeData(myKey, siblingKey, tradeChannelData) {
-    if (!this.db) return;
     const pairKey = this.getPairKey(myKey, siblingKey);
     if (!pairKey) return;
 
+    // 1. Instantly persist to shared local storage & broadcast to sibling profile
+    this.saveLocalTrades(pairKey, tradeChannelData);
+    if (this.onTradesUpdate) {
+      this.onTradesUpdate(tradeChannelData);
+    }
+
+    // 2. Persist to Firestore in the 'users' collection doc
+    if (!this.db) return;
     try {
-      const tradeDocRef = doc(this.db, 'trade_channels', pairKey);
+      const tradeDocRef = doc(this.db, 'users', `trade_channel_${pairKey}`);
       await setDoc(tradeDocRef, tradeChannelData, { merge: true });
     } catch (err) {
-      console.error("Error pushing trade channel data:", err);
+      console.warn('Firestore push trade data warning:', err.message || err);
     }
   }
 
   async pushState(state) {
     if (!this.db || !this.syncKey || !this.isSyncing) return;
-    
+
     try {
       const docRef = doc(this.db, 'users', this.syncKey);
       await setDoc(docRef, state, { merge: true });
     } catch (err) {
-      console.error("Error pushing state to Firestore:", err);
+      console.warn('Firestore push state warning:', err.message || err);
     }
   }
 }

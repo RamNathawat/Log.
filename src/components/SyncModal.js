@@ -21,23 +21,24 @@ export function renderSyncModal(state, onSync, onSwitchProfile, onClose) {
     <!-- Current active account info -->
     <div style="background: var(--color-surface-subtle); border-radius: 14px; padding: 12px 16px; margin-top: 14px; border: 1.5px solid var(--color-border-subtle);">
       <div style="font-size: 10px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-tertiary); margin-bottom: 6px;">Active Account</div>
-      <div style="font-size: 15px; font-weight: 700; color: var(--color-text-primary); letter-spacing: -0.01em;">${state?.character?.name || currentProfile === 'sister' ? 'Sister' : 'Ram'}</div>
+      <div style="font-size: 15px; font-weight: 700; color: var(--color-text-primary); letter-spacing: -0.01em;">${state?.character?.name || (currentProfile === 'sister' ? 'Sister' : 'Ram')}</div>
       <div style="font-size: 12px; font-family: var(--font-mono); color: var(--color-text-secondary); margin-top: 2px;">${currentKey}</div>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label for="sync-key" class="section-label">Your Sync Key</label>
+        <label for="sync-key" class="section-label">Your Device Sync Key</label>
         <p style="font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 2px;">
-          Enter <strong style="font-family: var(--font-mono); color: var(--color-text-secondary);">OS2290</strong> for Ram or <strong style="font-family: var(--font-mono); color: var(--color-text-secondary);">OS1837</strong> for Sister.
+          Enter <strong style="font-family: var(--font-mono); color: var(--color-text-secondary);">OS2290</strong> on Ram's device, or <strong style="font-family: var(--font-mono); color: var(--color-text-secondary);">OS1837</strong> on Sister's device.
         </p>
         <input type="text" id="sync-key" class="add-task-input-v2"
                value="${currentKey}"
+               placeholder="OS2290 / OS1837"
                style="text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.04em;" autocomplete="off">
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label for="sibling-sync-key" class="section-label">Linked Sibling Key (For Task Trades)</label>
+        <label for="sibling-sync-key" class="section-label">Linked Sibling Key (For Real-Time Trades)</label>
         <input type="text" id="sibling-sync-key" class="add-task-input-v2"
                value="${state?.siblingSyncKey || (currentProfile === 'sister' ? 'OS2290' : 'OS1837')}"
                placeholder="${currentProfile === 'sister' ? 'OS2290' : 'OS1837'}"
@@ -45,7 +46,7 @@ export function renderSyncModal(state, onSync, onSwitchProfile, onClose) {
       </div>
       
       <div style="display: flex; gap: 8px; margin-top: 6px;">
-        <button id="btn-start-sync" class="btn-primary" style="flex: 1; padding: 12px; font-size: 13.5px; font-weight: 600;">Save &amp; Sync</button>
+        <button id="btn-start-sync" class="btn-primary" style="flex: 1; padding: 12px; font-size: 13.5px; font-weight: 600;">Save &amp; Link Device</button>
         <button id="btn-close" class="btn-secondary" style="padding: 12px 16px;">Close</button>
       </div>
     </div>
@@ -55,6 +56,15 @@ export function renderSyncModal(state, onSync, onSwitchProfile, onClose) {
 
   const keyInput = modal.querySelector('#sync-key');
   const sibInput = modal.querySelector('#sibling-sync-key');
+
+  keyInput.addEventListener('input', () => {
+    const val = keyInput.value.trim().toUpperCase();
+    if (val === 'OS1837') {
+      sibInput.value = 'OS2290';
+    } else if (val === 'OS2290') {
+      sibInput.value = 'OS1837';
+    }
+  });
 
   modal.querySelector('#btn-start-sync').addEventListener('click', () => {
     const key = keyInput.value.trim().toUpperCase();
