@@ -1,4 +1,4 @@
-import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
+import { RecurrenceEngine, parseLocalDate, getLocalDateString } from '../engine/recurrenceEngine.js';
 import { CORE_RESPONSIBILITIES_CONFIG } from '../config/responsibilities.js';
 
 // Build a lookup map: id -> { name, category }
@@ -23,7 +23,7 @@ export function renderProgressScreen(state) {
   const dailyLogs = stats.dailyLogs || {};
   const char = state.character;
 
-  const anchorDate = state.date ? new Date(state.date + 'T12:00:00') : new Date();
+  const anchorDate = parseLocalDate(state.date);
 
   // ─── Live completion stats for today ─────────────────────────────────────
   const profile = state.profile || 'ram';
@@ -49,7 +49,7 @@ export function renderProgressScreen(state) {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(anchorDate);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = getLocalDateString(d);
     const isToday = (i === 0);
     let log = dailyLogs[key];
 
@@ -80,7 +80,7 @@ export function renderProgressScreen(state) {
   for (let i = 1; i <= LOOKBACK_DAYS; i++) {
     const d = new Date(anchorDate);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = getLocalDateString(d);
     const log = dailyLogs[key];
     if (!log) continue;
 
@@ -215,7 +215,7 @@ export function renderProgressScreen(state) {
     for (let i = 1; i <= LOOKBACK_DAYS; i++) {
       const d = new Date(anchorDate);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = getLocalDateString(d);
       const log = dailyLogs[key];
       if (!log) continue;
 

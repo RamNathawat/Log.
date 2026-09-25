@@ -2,7 +2,7 @@ import { CONFIG } from '../config/constants.js';
 import { StorageService } from './StorageService.js';
 import { getInitialState } from './initialData.js';
 import { dbSync } from './DatabaseSyncService.js';
-import { RecurrenceEngine } from '../engine/recurrenceEngine.js';
+import { RecurrenceEngine, getLocalDateString, parseLocalDate } from '../engine/recurrenceEngine.js';
 import { ChallengeEngine } from '../engine/challengeEngine.js';
 import { ProgressionEngine } from '../engine/progressionEngine.js';
 import { inferTaskWeight } from '../config/responsibilities.js';
@@ -199,7 +199,7 @@ class Store {
   }
 
   getCurrentPeriod() {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateString();
     const now = new Date();
     const times = ChallengeEngine.getDailyChallengeTimes(todayStr);
 
@@ -209,7 +209,7 @@ class Store {
   }
 
   ensureDateSync() {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateString();
     let changed = false;
 
     if (this.state.date !== todayStr) {
@@ -261,7 +261,7 @@ class Store {
       this.state.stats.dailyLogs = {};
     }
 
-    const targetDate = new Date(dateStr + 'T12:00:00');
+    const targetDate = parseLocalDate(dateStr);
     const profile = this.state.profile || 'ram';
     const dueList = RecurrenceEngine.getDueResponsibilities(targetDate, profile);
     const customTasks = this.state.customTasks || [];
@@ -308,6 +308,7 @@ class Store {
    * Rolls over state from this.state.date to targetDateStr.
    * Records stats for the prior date, fills in any inactive gap days,
    * unchecks daily habits and custom tasks for the new day,
+   * resets daily delegations so recurring habits return to their owner,
    * and preserves all permanent character attributes, level, XP, and history.
    */
   rolloverToDate(targetDateStr) {
@@ -317,15 +318,15 @@ class Store {
     this._recordDayStats(prevDate);
 
     // Calculate gap days between prevDate and targetDateStr
-    const prevTime = new Date(prevDate + 'T12:00:00').getTime();
-    const targetTime = new Date(targetDateStr + 'T12:00:00').getTime();
+    const prevTime = parseLocalDate(prevDate).getTime();
+    const targetTime = parseLocalDate(targetDateStr).getTime();
     const dayMs = 86400000;
     const diffDays = Math.round((targetTime - prevTime) / dayMs);
 
     if (diffDays > 1) {
       // User was away for multiple days; log gap days as 0% completion and break streak
       for (let i = 1; i < diffDays; i++) {
-        const gapDate = new Date(prevTime + i * dayMs).toISOString().slice(0, 10);
+        const gapDate = getLocalDateString(new Date(prevTime + i * dayMs));
         this.state.stats.dailyLogs[gapDate] = {
           totalDue: 0,
           completed: 0,
@@ -355,6 +356,16 @@ class Store {
 
     this.state.dailyResponsibilities = {};
 
+    // Reset daily delegations so core habits return to their owner each morning
+    this.state.delegatedTasks = {};
+
+    // Prune old resolved trades (older than today) so they don't re-trigger ghost adoptions
+    this.state.trades = (this.state.trades || []).filter(t => {
+      if (t.status === 'PENDING' || t.status === 'COUNTER_OFFER') return true;
+      const tDate = (t.resolvedAt || t.createdAt || '').slice(0, 10);
+      return tDate === targetDateStr;
+    });
+
     // Custom tasks: carry over postponed ones, drop everything else
     const carried = (this.state.customTasks || [])
       .filter(t => t.postponed && !t.completed)
@@ -381,9 +392,9 @@ class Store {
    * Advances the calendar by 1 day for testing day-to-day persistence.
    */
   simulateNextDay() {
-    const cur = new Date(this.state.date + 'T12:00:00');
+    const cur = parseLocalDate(this.state.date);
     cur.setDate(cur.getDate() + 1);
-    const nextDateStr = cur.toISOString().slice(0, 10);
+    const nextDateStr = getLocalDateString(cur);
     this.rolloverToDate(nextDateStr);
     this.notify();
   }
@@ -468,14 +479,14 @@ class Store {
   computeAndApplyRecovery() {
     const LOOKBACK = 14;
     const dailyLogs = this.state.stats?.dailyLogs || {};
-    const anchorDate = this.state.date ? new Date(this.state.date + 'T12:00:00') : new Date();
+    const anchorDate = parseLocalDate(this.state.date);
 
     // Compute miss counts for each task over the lookback window
     const missCount = {};
     for (let i = 1; i <= LOOKBACK; i++) {
       const d = new Date(anchorDate);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = getLocalDateString(d);
       const log = dailyLogs[key];
       if (!log) continue;
       (log.missedCoreIds || []).forEach(id => {
@@ -491,7 +502,7 @@ class Store {
       for (let i = 1; i <= LOOKBACK; i++) {
         const d = new Date(anchorDate);
         d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
+        const key = getLocalDateString(d);
         const log = dailyLogs[key];
         if (!log) continue;
         if ((log.missedCoreIds || []).includes(id)) break; // streak broken
@@ -503,7 +514,7 @@ class Store {
 
     // Apply the score as a recovery attribute top-up (capped at 60 max by ringGauge)
     const currentRecovery = this.state.character?.attributes?.RECOVERY ?? 10;
-    const targetRecovery = Math.min(60, Math.max(currentRecovery, totalRecoveryScore));
+    const targetRecovery = Math.min(60, Math.max(10, totalRecoveryScore > 0 ? 10 + totalRecoveryScore : currentRecovery));
     if (Math.abs(targetRecovery - currentRecovery) > 0.01) {
       this.state.character.attributes = ProgressionEngine.applyAttributeDeltas(
         this.state.character.attributes,
@@ -603,6 +614,16 @@ class Store {
   }
 
   removeCustomTask(id) {
+    // If this task has an active trade pending, cancel the trade offer first
+    const pendingTrade = (this.state.trades || []).find(t => 
+      (t.status === 'PENDING' || t.status === 'COUNTER_OFFER') && 
+      t.fromUser === this.state.syncKey && 
+      t.taskId === id
+    );
+    if (pendingTrade) {
+      this.cancelTradeOffer(pendingTrade.id);
+    }
+
     this.state.customTasks = (this.state.customTasks || []).filter(t => t.id !== id);
     this.evaluateRecreationUnlock();
     this.notify();
@@ -755,9 +776,14 @@ class Store {
   _syncAcceptedTradesToState() {
     if (!this.state.trades || !this.state.syncKey) return;
     let changed = false;
+    const todayStr = this.state.date || getLocalDateString();
 
     for (const trade of this.state.trades) {
       if (trade.status === 'ACCEPTED') {
+        const tradeDate = (trade.createdAt || '').slice(0, 10);
+        // Only adopt tasks that were traded for today's session
+        if (tradeDate && tradeDate !== todayStr) continue;
+
         // If current user is the recipient (toUser)
         if (trade.toUser === this.state.syncKey) {
           const alreadyAdopted = (this.state.customTasks || []).some(t => t.tradeId === trade.id);

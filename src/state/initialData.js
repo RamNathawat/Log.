@@ -1,4 +1,5 @@
 import { CONFIG } from '../config/constants.js';
+import { getLocalDateString } from '../engine/recurrenceEngine.js';
 
 /**
  * Initial Application State & Seed Placeholders
@@ -6,7 +7,7 @@ import { CONFIG } from '../config/constants.js';
  * Fitness measurements are default seed placeholders to be calibrated by the user.
  */
 export function getInitialState(profile = 'ram') {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateString();
   const isSister = profile === 'sister';
 
   return {

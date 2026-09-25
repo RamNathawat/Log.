@@ -66,6 +66,27 @@ class DatabaseSyncService {
     return [key1.toUpperCase(), key2.toUpperCase()].sort().join('_');
   }
 
+  mergeTradeLists(existingTrades = [], incomingTrades = []) {
+    const map = new Map();
+    for (const t of (existingTrades || [])) {
+      if (t && t.id) map.set(t.id, t);
+    }
+    for (const t of (incomingTrades || [])) {
+      if (!t || !t.id) continue;
+      const prev = map.get(t.id);
+      if (!prev) {
+        map.set(t.id, t);
+      } else {
+        const prevTime = prev.resolvedAt || prev.createdAt || '';
+        const incTime = t.resolvedAt || t.createdAt || '';
+        if (incTime >= prevTime || (t.status !== 'PENDING' && prev.status === 'PENDING')) {
+          map.set(t.id, { ...prev, ...t });
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }
+
   getLocalTrades(pairKey) {
     if (!pairKey || typeof localStorage === 'undefined') return null;
     try {
@@ -156,11 +177,15 @@ class DatabaseSyncService {
         const tradeSnap = await getDoc(tradeDocRef);
         if (tradeSnap.exists()) {
           const data = tradeSnap.data();
+          const local = this.getLocalTrades(pairKey) || {};
+          const mergedTrades = this.mergeTradeLists(local.trades, data.trades);
+          const reconciledData = { ...data, trades: mergedTrades };
+
           // Cache sibling's task snapshot (keyed by their sync key)
           const sibSnapshotKey = `snapshot_${siblingKey.toUpperCase()}`;
           if (data[sibSnapshotKey]) this._siblingSnapshot = data[sibSnapshotKey];
-          this.saveLocalTrades(pairKey, data);
-          if (this.onTradesUpdate) this.onTradesUpdate(data);
+          this.saveLocalTrades(pairKey, reconciledData);
+          if (this.onTradesUpdate) this.onTradesUpdate(reconciledData);
         }
       } catch (err) {
         console.warn('Firestore trade channel fetch warning:', err.message || err);
@@ -172,11 +197,15 @@ class DatabaseSyncService {
           (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
+              const local = this.getLocalTrades(pairKey) || {};
+              const mergedTrades = this.mergeTradeLists(local.trades, data.trades);
+              const reconciledData = { ...data, trades: mergedTrades };
+
               // Always refresh sibling snapshot on every update
               const sibSnapshotKey = `snapshot_${(this.siblingKey || siblingKey).toUpperCase()}`;
               if (data[sibSnapshotKey]) this._siblingSnapshot = data[sibSnapshotKey];
-              this.saveLocalTrades(pairKey, data);
-              if (this.onTradesUpdate) this.onTradesUpdate(data);
+              this.saveLocalTrades(pairKey, reconciledData);
+              if (this.onTradesUpdate) this.onTradesUpdate(reconciledData);
             }
           },
           (err) => {
@@ -211,6 +240,12 @@ class DatabaseSyncService {
   async pushTradeData(myKey, siblingKey, tradeChannelData) {
     const pairKey = this.getPairKey(myKey, siblingKey);
     if (!pairKey) return;
+
+    // Reconcile with any existing local trades so concurrent operations don't clobber
+    const local = this.getLocalTrades(pairKey);
+    if (local && local.trades && tradeChannelData.trades) {
+      tradeChannelData.trades = this.mergeTradeLists(local.trades, tradeChannelData.trades);
+    }
 
     // 1. Instantly persist to shared local storage & broadcast to sibling profile
     this.saveLocalTrades(pairKey, tradeChannelData);

@@ -1,3 +1,5 @@
+import { parseLocalDate, getLocalDateString } from '../engine/recurrenceEngine.js';
+
 /**
  * StatsSection — Tracking, Streaks & Activity History
  * Shows streak counters, a 7-day completion heatmap, and recent history log.
@@ -8,13 +10,14 @@ export function renderStatsSection(state) {
   const longestStreak = stats.longestStreak || 0;
   const totalDays = stats.totalDaysTracked || 0;
   const dailyLogs = stats.dailyLogs || {};
+  const anchorDate = parseLocalDate(state.date);
 
   // Build last 7 days
   const days = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
+    const d = new Date(anchorDate);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = getLocalDateString(d);
     const log = dailyLogs[key];
     const isToday = i === 0;
     days.push({ key, log, isToday, dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() });
@@ -59,7 +62,7 @@ export function renderStatsSection(state) {
   }).join('');
 
   // Calculate today's completion rate
-  const todayLog = dailyLogs[new Date().toISOString().slice(0, 10)];
+  const todayLog = dailyLogs[getLocalDateString(anchorDate)];
   const todayRateText = todayLog
     ? `${todayLog.completionRate}% today`
     : 'No data yet';

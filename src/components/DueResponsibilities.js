@@ -170,7 +170,7 @@ export function renderDueResponsibilities(
             </div>
           </div>
           <div class="task-right">
-            ${!isTraded ? `
+            ${(!isTraded && !isTradePending) ? `
               <button class="task-remove-btn" data-remove-id="${task.id}" title="Remove task" aria-label="Remove ${task.name}">
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                   <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -560,7 +560,7 @@ export function renderDueResponsibilities(
     let didLongPress = false;
     let lastLongPressTime = 0;
     let startX = 0, startY = 0;
-    const THRESHOLD = 8;
+    const THRESHOLD = 12;
 
     // Desktop: right-click → postpone sheet (suppressed if touch long-press just fired)
     row.addEventListener('contextmenu', (e) => {
