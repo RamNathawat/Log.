@@ -3,6 +3,8 @@ name: Build Android APK (Cloud Build)
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -28,11 +30,22 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Install Node Dependencies
+      - name: Install Root Dependencies
         run: npm ci || npm install
 
-      - name: Build Web Application
-        run: npm run build
+      - name: Build Standalone Web App
+        run: |
+          if [ -d "app" ]; then
+            echo "Building from updated app/ directory..."
+            cd app
+            npm ci || npm install || true
+            npm run build
+            cd ..
+            rm -rf dist
+            cp -r app/dist dist
+          else
+            npm run build
+          fi
 
       - name: Sync Capacitor Android
         run: npx cap sync android
@@ -45,9 +58,15 @@ jobs:
           cd android
           ./gradlew assembleDebug --no-daemon
 
+      - name: Prepare APK for Download
+        run: |
+          mkdir -p build-artifacts
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/Log-App.apk
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: log-app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
+          name: Log-App-APK
+          path: build-artifacts/Log-App.apk
+          retention-days: 30
+

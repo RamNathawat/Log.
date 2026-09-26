@@ -1,0 +1,8 @@
+{
+  "appId": "com.ramnathawat.log",
+  "appName": "Log.",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
