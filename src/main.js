@@ -148,16 +148,34 @@ function closeModal() {
 }
 
 store.subscribe(() => renderApp());
-
-// Re-render whenever auth state changes (handles Google redirect return)
 authService.subscribe((user) => {
-  if (user) {
-    store.setUserAccount(user);
-  }
+  if (user) store.setUserAccount(user);
   renderApp();
 });
 
-renderApp();
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+// Show a minimal loading splash, wait for auth session to resolve (this
+// handles the Google redirect return case), then hand off to renderApp().
+async function init() {
+  const root = document.getElementById('app');
+  if (root) {
+    root.innerHTML = `
+      <div style="
+        display:flex; align-items:center; justify-content:center;
+        height:100dvh; background:#f5f5f0;
+        font-family:'Inter',sans-serif; flex-direction:column; gap:12px;">
+        <div style="font-size:28px; font-weight:800; letter-spacing:-1px;">Log.</div>
+        <div style="width:32px; height:3px; background:#111; border-radius:2px;
+          animation: loadpulse 1s ease-in-out infinite alternate;"></div>
+      </div>
+      <style>@keyframes loadpulse { from{opacity:.2} to{opacity:1} }</style>
+    `;
+  }
+  await authService.waitForReady();
+  renderApp();
+}
+
+init();
 
 
 // Dev test helpers accessible from browser console
