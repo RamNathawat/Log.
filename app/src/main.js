@@ -148,7 +148,17 @@ function closeModal() {
 }
 
 store.subscribe(() => renderApp());
+
+// Re-render whenever auth state changes (handles Google redirect return)
+authService.subscribe((user) => {
+  if (user) {
+    store.setUserAccount(user);
+  }
+  renderApp();
+});
+
 renderApp();
+
 
 // Dev test helpers accessible from browser console
 window.store = store;
