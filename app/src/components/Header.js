@@ -63,17 +63,33 @@ export function renderHeader(state, onAction) {
       <div class="action-sheet-title">Settings</div>
 
       <div class="action-sheet-list">
-        <button class="action-sheet-item" id="as-sync">
+        <button class="action-sheet-item" id="as-pair">
           <div class="action-sheet-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="1 4 1 10 7 10"></polyline>
-              <polyline points="23 20 23 14 17 14"></polyline>
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
             </svg>
           </div>
           <div class="action-sheet-item-text">
-            <span class="action-sheet-item-label">Cloud Sync</span>
-            <span class="action-sheet-item-sub">Backup & restore your data</span>
+            <span class="action-sheet-item-label">Link Sibling</span>
+            <span class="action-sheet-item-sub">Generate or enter 6-digit sync code</span>
+          </div>
+          <svg class="action-sheet-item-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+
+        <div class="action-sheet-divider"></div>
+
+        <button class="action-sheet-item action-sheet-item--destructive" id="as-signout">
+          <div class="action-sheet-item-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </div>
+          <div class="action-sheet-item-text">
+            <span class="action-sheet-item-label">Sign Out</span>
+            <span class="action-sheet-item-sub">${state.email || 'Logged in as ' + name}</span>
           </div>
           <svg class="action-sheet-item-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
@@ -145,9 +161,13 @@ export function renderHeader(state, onAction) {
 
     sheet.querySelector('#as-cancel').addEventListener('click', close);
 
-    sheet.querySelector('#as-sync').addEventListener('click', () => {
+    sheet.querySelector('#as-pair').addEventListener('click', () => {
       close();
-      setTimeout(() => onAction('OPEN_SYNC'), 100);
+      setTimeout(() => onAction('OPEN_PAIR'), 100);
+    });
+    sheet.querySelector('#as-signout').addEventListener('click', () => {
+      close();
+      setTimeout(() => onAction('SIGN_OUT'), 100);
     });
     sheet.querySelector('#as-calibrate').addEventListener('click', () => {
       close();
@@ -163,3 +183,4 @@ export function renderHeader(state, onAction) {
 
   return element;
 }
+

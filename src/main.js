@@ -1,5 +1,6 @@
 import './styles/main.css';
 import { store } from './state/store.js';
+import { authService } from './services/authService.js';
 import { renderHeader } from './components/Header.js';
 import { renderNavigation } from './components/Navigation.js';
 import { renderCharacterOverview } from './components/CharacterOverview.js';
@@ -8,7 +9,8 @@ import { renderSideQuestDirective } from './components/SideQuestDirective.js';
 import { renderProgressScreen } from './components/ProgressScreen.js';
 import { renderLongTermPillars } from './components/LongTermPillars.js';
 import { renderAccountabilityModal, renderCalibrationModal } from './components/AccountabilityModal.js';
-import { renderSyncModal } from './components/SyncModal.js';
+import { renderPairModal } from './components/PairModal.js';
+import { renderAuthScreen } from './components/AuthScreen.js';
 import { notifier } from './services/notificationService.js';
 
 let activeModal = null;
@@ -17,6 +19,17 @@ let currentScreen = 'today'; // 'today' | 'progress' | 'pillars'
 function renderApp() {
   const root = document.getElementById('app');
   if (!root) return;
+
+  // 0. Login-First Check: If user is not authenticated, show full-screen login landing page
+  if (!authService.isAuthenticated()) {
+    root.innerHTML = '';
+    const authScreen = renderAuthScreen((user) => {
+      store.setUserAccount(user);
+      renderApp();
+    });
+    root.appendChild(authScreen);
+    return;
+  }
 
   const state = store.getState();
 
@@ -29,17 +42,26 @@ function renderApp() {
   const container = document.createElement('div');
   container.className = 'system-container';
 
-  // 1. Header (Date, Audio, Baseline, Review, Level badge)
+  // 1. Header (Date, Audio, Baseline, Review, Level badge, Sign out)
   const header = renderHeader(state, (action) => {
     if (action === 'OPEN_CALIBRATE') {
       openModal(renderCalibrationModal(state.baseline, (data) => store.updateBaseline(data), closeModal));
-    } else if (action === 'OPEN_SYNC') {
-      openModal(renderSyncModal(
+    } else if (action === 'OPEN_PAIR') {
+      openModal(renderPairModal(
         state,
-        (myKey, sibKey) => store.setSyncKeys(myKey, sibKey),
-        (newProfile) => store.setUserProfile(newProfile),
+        (partner) => {
+          store.setPairedPartner(partner);
+          closeModal();
+        },
+        () => {
+          store.unpairPartner();
+          closeModal();
+        },
         closeModal
       ));
+    } else if (action === 'SIGN_OUT') {
+      store.signOut();
+      renderApp();
     } else if (action === 'OPEN_EVAL') {
       const evalReport = store.evaluateDayStatus();
       openModal(renderAccountabilityModal(evalReport, closeModal));
@@ -53,6 +75,7 @@ function renderApp() {
     currentScreen = newScreen;
     renderApp();
   });
+
 
   container.appendChild(header);
 

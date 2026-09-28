@@ -9,6 +9,8 @@ import { inferTaskWeight } from '../config/responsibilities.js';
 import { audio } from '../services/audioService.js';
 import { notifier } from '../services/notificationService.js';
 import { haptics } from '../services/hapticsService.js';
+import { authService } from '../services/authService.js';
+
 
 class Store {
   constructor() {
@@ -19,14 +21,7 @@ class Store {
     this.migrateState();
 
     this.ensureDateSync();
-    this.scheduleDailyAlarms();
     setInterval(() => this.ensureDateSync(), 60000); // Check every minute for rollovers
-  }
-
-  scheduleDailyAlarms() {
-    const todayStr = getLocalDateString();
-    const times = ChallengeEngine.getDailyChallengeTimes(todayStr);
-    notifier.scheduleDailyAlarms(todayStr, times);
   }
 
   loadState() {
@@ -161,6 +156,59 @@ class Store {
     this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
   }
 
+  setPairedPartner(partner) {
+    if (!partner) return;
+    this.state.pairedWith = partner;
+    this.state.siblingSyncKey = partner.uid;
+    this.addLog('SIBLING_LINKED', `Linked with ${partner.name || 'Sibling'} (${partner.uid})`);
+    this.notify();
+    this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
+  }
+
+  unpairPartner() {
+    this.state.pairedWith = null;
+    this.addLog('SIBLING_UNLINKED', 'Disconnected pairing link.');
+    this.notify();
+  }
+
+  isAuthenticated() {
+    return authService.isAuthenticated();
+  }
+
+  setUserAccount(user) {
+    if (!user) return;
+    this.state.authUid = user.uid;
+    this.state.email = user.email;
+    if (user.displayName) {
+      this.state.character.name = user.displayName;
+    }
+    // Generate or derive a unique clean syncKey for this user account if not already set
+    if (!this.state.syncKey || this.state.syncKey === 'OS2290' || this.state.syncKey === 'OS1837') {
+      const hash = Math.abs(this._hashUid(user.uid || user.email));
+      this.state.syncKey = `OS${(hash % 9000 + 1000)}`;
+    }
+    this.addLog('AUTH_LOGIN', `Logged in as ${user.email || user.displayName} (${this.state.syncKey})`);
+    this.notify();
+    this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
+  }
+
+  _hashUid(str) {
+    let hash = 0;
+    for (let i = 0; i < (str || '').length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }
+
+  async signOut() {
+    await authService.signOut();
+    StorageService.clear();
+    this.state = getInitialState('default');
+    this.notify();
+  }
+
+
   setSyncKeys(myKey, siblingKey) {
     if (myKey) this.state.syncKey = myKey.toUpperCase();
     if (siblingKey) this.state.siblingSyncKey = siblingKey.toUpperCase();
@@ -182,6 +230,15 @@ class Store {
           console.info('[Store] Ignored remote state for different profile:', remoteState.profile);
           return;
         }
+
+        // Real-time paired partner sync (triggers automatically when partner redeems code)
+        if (remoteState.pairedWith && (!this.state.pairedWith || this.state.pairedWith.uid !== remoteState.pairedWith.uid)) {
+          this.state.pairedWith = remoteState.pairedWith;
+          this.state.siblingSyncKey = remoteState.pairedWith.uid;
+        } else if (remoteState.pairedWith === null && this.state.pairedWith) {
+          this.state.pairedWith = null;
+        }
+
         this.state = { ...this.state, ...remoteState };
         StorageService.save(this.state, this.state.profile);
         StorageService.setActiveProfile(this.state.profile);
@@ -195,7 +252,6 @@ class Store {
         const channelTrades = tradeChannelData.trades || [];
         this.state.trades = channelTrades;
         this._syncAcceptedTradesToState();
-        notifier.checkAndNotifyTradeEvents(channelTrades, this.state.syncKey);
         StorageService.save(this.state, this.state.profile);
         for (const listener of this.listeners) {
           listener(this.state);
@@ -394,7 +450,6 @@ class Store {
     };
 
     this.addLog('DATE_ROLLOVER', `Date transitioned to ${targetDateStr}. ${carried.length} custom + ${Object.keys(updatedPostponedCore).length} core task(s) carried forward.`);
-    this.scheduleDailyAlarms();
   }
 
   /**
