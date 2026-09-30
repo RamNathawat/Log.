@@ -232,11 +232,15 @@ class Store {
         }
 
         // Real-time paired partner sync (triggers automatically when partner redeems code)
+        let pairingChanged = false;
         if (remoteState.pairedWith && (!this.state.pairedWith || this.state.pairedWith.uid !== remoteState.pairedWith.uid)) {
           this.state.pairedWith = remoteState.pairedWith;
           this.state.siblingSyncKey = remoteState.pairedWith.uid;
+          pairingChanged = true;
+          this.addLog('SIBLING_LINKED', `Linked with ${remoteState.pairedWith.name || 'Sibling'} (${remoteState.pairedWith.uid})`);
         } else if (remoteState.pairedWith === null && this.state.pairedWith) {
           this.state.pairedWith = null;
+          pairingChanged = true;
         }
 
         this.state = { ...this.state, ...remoteState };
@@ -245,11 +249,32 @@ class Store {
         for (const listener of this.listeners) {
           listener(this.state);
         }
+
+        // If newly paired, immediately reconnect the trade channel listener with the sibling's real key
+        if (pairingChanged && this.state.pairedWith?.uid) {
+          this.startCloudSync(this.state.syncKey, this.state.siblingSyncKey);
+        }
       },
       (tradeChannelData) => {
         // Trade channel is the ONLY cross-profile shared data
         if (!tradeChannelData) return;
         const channelTrades = tradeChannelData.trades || [];
+
+        // Check for new incoming trade offer that wasn't previously in state
+        const previousTrades = this.state.trades || [];
+        const prevPendingIds = new Set(previousTrades.filter(t => t.status === 'PENDING').map(t => t.id));
+        const newIncomingTrade = channelTrades.find(
+          t => t.status === 'PENDING' && t.fromUser !== this.state.syncKey && !prevPendingIds.has(t.id)
+        );
+
+        if (newIncomingTrade) {
+          audio.playDirectiveAlert?.();
+          haptics.notificationSuccess?.();
+          notifier.send('New Task Trade Request', {
+            body: `${newIncomingTrade.fromName || 'Sibling'} wants to trade "${newIncomingTrade.taskName}".`
+          });
+        }
+
         this.state.trades = channelTrades;
         this._syncAcceptedTradesToState();
         StorageService.save(this.state, this.state.profile);

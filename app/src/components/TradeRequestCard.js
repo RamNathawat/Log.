@@ -4,12 +4,27 @@ import { renderTradeModal } from './TradeModal.js';
 export function renderTradeRequestCards(trades, currentSyncKey, availableTasks, onRespond, onCounter) {
   if (!trades || trades.length === 0) return null;
 
+  const myKey = (currentSyncKey || '').toUpperCase();
+
   // Filter trades that need attention from current user:
-  // 1. Pending trade targeting current user (toUser === currentSyncKey && status === 'PENDING')
-  // 2. Counter-offer sent back to current user (fromUser === currentSyncKey && status === 'COUNTER_OFFER')
+  // 1. Pending trade sent from sibling to this user
+  // 2. Counter-offer sent back from sibling to this user
   const pendingTrades = trades.filter(t => {
-    if (t.status === 'PENDING' && t.toUser === currentSyncKey) return true;
-    if (t.status === 'COUNTER_OFFER' && t.fromUser === currentSyncKey) return true;
+    if (!t) return false;
+    const fromKey = (t.fromUser || '').toUpperCase();
+    const toKey = (t.toUser || '').toUpperCase();
+    const counterFromKey = (t.counterOffer?.fromUser || '').toUpperCase();
+
+    if (t.status === 'PENDING') {
+      // It's for me if I'm the recipient (toKey === myKey) OR if it was sent by someone else in the channel (fromKey !== myKey)
+      return toKey === myKey || (fromKey && fromKey !== myKey);
+    }
+
+    if (t.status === 'COUNTER_OFFER') {
+      // A counter-offer needs attention if sent by sibling back to me
+      return counterFromKey !== myKey && (fromKey === myKey || toKey === myKey);
+    }
+
     return false;
   });
 
